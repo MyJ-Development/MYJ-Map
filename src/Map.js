@@ -4,7 +4,7 @@ import axios from 'axios';
 import { Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button } from '@material-ui/core';
 import withReactContent from 'sweetalert2-react-content';
 import Swal from 'sweetalert2';
-const API_URL = process.env.API_URL;
+const API_URL = process.env.REACT_APP_API_URL;
 const apiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
 console.log("API_URL", API_URL);
 console.log("apiKey", apiKey);
