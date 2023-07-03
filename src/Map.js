@@ -4,7 +4,7 @@ import axios from 'axios';
 import { Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button } from '@material-ui/core';
 import withReactContent from 'sweetalert2-react-content';
 import Swal from 'sweetalert2';
-const API_URL = 'http://localhost:5000'; // Reemplaza con tu URL de API
+const API_URL = process.env.API_URL; // Reemplaza con tu URL de API
 const apiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
 function MapContainer({ google }) {
   const [markers, setMarkers] = useState([]);
