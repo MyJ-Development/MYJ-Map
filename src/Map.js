@@ -18,6 +18,7 @@ function MapContainer({ google }) {
   const [open, setOpen] = useState(false);
   const MySwal = withReactContent(Swal);
   const [markerTypes, setMarkerTypes] = useState([]);
+  const [modifiedMarkers, setModifiedMarkers] = useState([]);
 
   useEffect(() => {
     loadMarkersFromAPI();
@@ -116,8 +117,8 @@ function MapContainer({ google }) {
   };
 
   const handleMapClick = (mapProps, map, clickEvent) => {
-    if (!editMode) return; // Solo agregar marcadores en modo edición
-    if (!selectedMarkerType) return; // Validar que se haya seleccionado un tipo de marcador
+    if (!editMode) return; 
+    if (!selectedMarkerType) return;
 
     const { latLng } = clickEvent;
     const lat = latLng.lat();
@@ -130,32 +131,40 @@ function MapContainer({ google }) {
     setMarkers(prevMarkers => [...prevMarkers, newMarker]);
   };
 
-  const handleMarkerDragEnd = (marker, mapProps, map, dragEvent) => {
-    const { latLng } = dragEvent;
-    const lat = latLng.lat();
-    const lng = latLng.lng();
+ const handleMarkerDragEnd = (marker, mapProps, map, dragEvent) => {
+  const { latLng } = dragEvent;
+  const lat = latLng.lat();
+  const lng = latLng.lng();
 
-    const updatedMarker = {
-      ...marker,
-      lat,
-      lng
-    };
+  const updatedMarker = {
+    ...marker,
+    lat,
+    lng
+  };
 
-    setMarkers(prevMarkers => prevMarkers.map(m => m.id === marker.id ? updatedMarker : m));
-
-    //updateMarkerInAPI(updatedMarker);
+  setMarkers(prevMarkers => prevMarkers.map(m => m.id === marker.id ? updatedMarker : m));
+  
+  // Verificar si el marcador ya se encuentra en la lista de marcadores modificados
+  // si no se encuentra, agregarlo a la lista
+  if (!modifiedMarkers.some(m => m.id === marker.id)) {
+    setModifiedMarkers(prevModifiedMarkers => [...prevModifiedMarkers, updatedMarker]);
+  } else {
+    // Si el marcador ya está en la lista de modificados, se actualiza.
+    setModifiedMarkers(prevModifiedMarkers => prevModifiedMarkers.map(m => m.id === marker.id ? updatedMarker : m));
+  }
   };
 
   const toggleEditMode = () => {
     setEditMode(prevEditMode => {
       if (prevEditMode) {
-        markers.forEach(marker => {
+        modifiedMarkers.forEach(marker => {
           if (marker.id) {
             updateMarkerInAPI(marker);
           } else {
             createMarkerInAPI(marker);
-          }
+          } 
         });
+        setModifiedMarkers([]);
       }
       return !prevEditMode;
     });
@@ -313,8 +322,7 @@ function MapContainer({ google }) {
   >
     <DialogTitle style={{ textAlign: 'center' }}>{selectedMarker?.type}</DialogTitle>
     <DialogContent>
-      <DialogContentText>Latitude: {selectedMarker?.lat}</DialogContentText>
-      <DialogContentText>Longitude: {selectedMarker?.lng}</DialogContentText>
+      <DialogContentText>{selectedMarker?.description}</DialogContentText>
     </DialogContent>
     <DialogActions style={{justifyContent:"center"}}>
       {editMode && (
