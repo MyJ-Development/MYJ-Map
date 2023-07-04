@@ -1,15 +1,16 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Map, Marker, Polyline, GoogleApiWrapper } from "google-maps-react";
 import axios from 'axios';
 import { Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button } from '@material-ui/core';
 import withReactContent from 'sweetalert2-react-content';
 import Swal from 'sweetalert2';
+import _ from 'lodash';
 
 const API_URL = process.env.REACT_APP_API_URL;
 const apiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
-console.log("API_URL", API_URL);
-console.log("apiKey", apiKey);
+
 function MapContainer({ google }) {
+  
   const [markers, setMarkers] = useState([]);
   const [editMode, setEditMode] = useState(false);
   const [selectedMarkerType, setSelectedMarkerType] = useState("");
@@ -19,6 +20,7 @@ function MapContainer({ google }) {
   const MySwal = withReactContent(Swal);
   const [markerTypes, setMarkerTypes] = useState([]);
   const [modifiedMarkers, setModifiedMarkers] = useState([]);
+  
 
   useEffect(() => {
     loadMarkersFromAPI();
@@ -43,6 +45,11 @@ function MapContainer({ google }) {
     try {
       const response = await axios.get(`${API_URL}/markers`);
       const markers = response.data;
+      //add property draggable to each marker
+      markers.forEach(marker => {
+        marker.draggable = false;
+      });
+
       setMarkers(markers);
     } catch (err) {
       console.error(err);
@@ -77,8 +84,14 @@ function MapContainer({ google }) {
 
   const handleClickOpen = marker => {
     if (marker) {
-      setSelectedMarker(marker);
+      const updatedMarker = { ...marker, draggable: true }; // Invierte el valor de la propiedad draggable
+      setSelectedMarker(updatedMarker);
       setOpen(true);
+      setMarkers(prevMarkers =>
+        prevMarkers.map(m =>
+          m.id === marker.id ? updatedMarker : m // Actualiza el marcador en el arreglo de marcadores
+        )
+      );
     }
   };
 
@@ -126,35 +139,35 @@ function MapContainer({ google }) {
     const newMarker = {
       lat,
       lng,
-      type: selectedMarkerType
+      type: selectedMarkerType,
+      draggable: true
     };
     setMarkers(prevMarkers => [...prevMarkers, newMarker]);
   };
 
- const handleMarkerDragEnd = (marker, mapProps, map, dragEvent) => {
-  const { latLng } = dragEvent;
-  const lat = latLng.lat();
-  const lng = latLng.lng();
-
-  const updatedMarker = {
-    ...marker,
-    lat,
-    lng
-  };
-
-  setMarkers(prevMarkers => prevMarkers.map(m => m.id === marker.id ? updatedMarker : m));
+  const handleMarkerDragEnd = useCallback((marker, mapProps, map, dragEvent) => {
+    const { latLng } = dragEvent;
+    const lat = latLng.lat();
+    const lng = latLng.lng();
   
-  // Verificar si el marcador ya se encuentra en la lista de marcadores modificados
-  // si no se encuentra, agregarlo a la lista
-  if (!modifiedMarkers.some(m => m.id === marker.id)) {
-    setModifiedMarkers(prevModifiedMarkers => [...prevModifiedMarkers, updatedMarker]);
-  } else {
-    // Si el marcador ya está en la lista de modificados, se actualiza.
-    setModifiedMarkers(prevModifiedMarkers => prevModifiedMarkers.map(m => m.id === marker.id ? updatedMarker : m));
-  }
-  };
+    const updatedMarker = {
+      ...marker,
+      lat,
+      lng
+    };
+  
+    setMarkers(prevMarkers => prevMarkers.map(m => m.id === marker.id ? updatedMarker : m));
+    
+    if (!modifiedMarkers.some(m => m.id === marker.id)) {
+      setModifiedMarkers(prevModifiedMarkers => [...prevModifiedMarkers, updatedMarker]);
+    } else {
+      setModifiedMarkers(prevModifiedMarkers => prevModifiedMarkers.map(m => m.id === marker.id ? updatedMarker : m));
+    }
+  }, [modifiedMarkers]);
 
-  const toggleEditMode = () => {
+  const debouncedHandleMarkerDragEnd = _.debounce(handleMarkerDragEnd, 200);
+
+  const toggleEditMode = useCallback(() => {
     setEditMode(prevEditMode => {
       if (prevEditMode) {
         modifiedMarkers.forEach(marker => {
@@ -168,7 +181,7 @@ function MapContainer({ google }) {
       }
       return !prevEditMode;
     });
-  };
+  }, [modifiedMarkers]);
 
   const handleMarkerTypeChange = event => {
     setSelectedMarkerType(event.target.value);
@@ -220,21 +233,7 @@ function MapContainer({ google }) {
 
   return (
     <div>
-      <button onClick={toggleEditMode}>
-        {editMode ? "Guardar cambios" : "Entrar en modo edición"}
-      </button>
-      <select value={selectedMarkerType} onChange={handleMarkerTypeChange} disabled={!editMode}>
-        <option value="">Seleccionar tipo de marcador</option>
-        {markerTypes.map(type => (
-          <option key={type} value={type}>{type}</option>
-        ))}
-      </select>
-      <div>
-        <h3>Ocultar/Mostrar Marcadores</h3>
-      </div>
-      <div>
-        <button onClick={handleAddMarkerType}>Agregar Tipo de Marcador</button>
-      </div>
+
       <Map
   google={google}
   zoom={15}
@@ -252,6 +251,21 @@ function MapContainer({ google }) {
     maxHeight: '600px', // Altura máxima definida, cambiar según sea necesario
     overflowY: 'auto' // Agrega scrollbar si el contenido excede la altura máxima
   }}>
+          <button onClick={toggleEditMode}>
+        {editMode ? "Guardar cambios" : "Entrar en modo edición"}
+      </button>
+      <select value={selectedMarkerType} onChange={handleMarkerTypeChange} disabled={!editMode}>
+        <option value="">Seleccionar tipo de marcador</option>
+        {markerTypes.map(type => (
+          <option key={type} value={type}>{type}</option>
+        ))}
+      </select>
+      <div>
+        <h3>Ocultar/Mostrar Marcadores</h3>
+      </div>
+      <div>
+        <button onClick={handleAddMarkerType}>Agregar Tipo de Marcador</button>
+      </div>
     <button onClick={handleHideAll}>Ocultar todos</button>
     <table>
       <tbody>
@@ -291,10 +305,10 @@ function MapContainer({ google }) {
                 : "https://maps.google.com/mapfiles/ms/icons/blue-dot.png",
                 scaledSize: new window.google.maps.Size(20, 20),  // Este es tu valor por defecto
         }}
-        draggable={editMode}
+        draggable={editMode && marker.draggable} // Toma en cuenta el estado de "draggable" del marcador
         onClick={() => handleClickOpen(marker)}
         onDragend={(mapProps, map, dragEvent) =>
-          handleMarkerDragEnd(marker, mapProps, map, dragEvent)
+          debouncedHandleMarkerDragEnd(marker, mapProps, map, dragEvent)
         }
       ></Marker>
     );
