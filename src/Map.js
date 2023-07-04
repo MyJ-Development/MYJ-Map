@@ -4,6 +4,7 @@ import axios from 'axios';
 import { Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button } from '@material-ui/core';
 import withReactContent from 'sweetalert2-react-content';
 import Swal from 'sweetalert2';
+
 const API_URL = process.env.REACT_APP_API_URL;
 const apiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
 console.log("API_URL", API_URL);
@@ -205,84 +206,106 @@ function MapContainer({ google }) {
       </select>
       <div>
         <h3>Ocultar/Mostrar Marcadores</h3>
-        {markerTypes.map(type => (
-          <label key={type}>
-            {type}:
-            <input
-              type="checkbox"
-              checked={markerVisibility[type]}
-              onChange={e => handleMarkerVisibilityChange(type, e)}
-            />
-          </label>
-        ))}
       </div>
       <div>
         <button onClick={handleAddMarkerType}>Agregar Tipo de Marcador</button>
       </div>
       <Map
-        google={google}
-        zoom={15}
-        style={mapStyles}
-        initialCenter={{ lat: -33.367613, lng: -70.738301 }}
-        onClick={handleMapClick}
-      >
-        {markers.map((marker, index) => {
-          const isVisible = markerVisibility[marker.type];
-          if (!isVisible) return null;
-
-          return (
-            <Marker
-                key={marker.id}
-                id={marker.id}
-                position={{ lat: marker.lat, lng: marker.lng }}
-                icon={{
-                  url: marker.type === "Mufa"
-                    ? "https://maps.google.com/mapfiles/ms/icons/red-dot.png"
-                    : marker.type === "NAP"
-                    ? "https://maps.google.com/mapfiles/ms/icons/yellow-dot.png"
-                    : "https://maps.google.com/mapfiles/ms/icons/blue-dot.png"
-                }}
-                draggable={editMode}
-                onClick={() => handleClickOpen(marker)}
-                onDragend={(mapProps, map, dragEvent) =>
-                  handleMarkerDragEnd(marker, mapProps, map, dragEvent)
-                }
-              ></Marker>
-          );
-        })}
-        {markerTypes.map(type => {
-          if (markerVisibility[type] && type !== "Mufa" && type !== "NAP") {
-            return (
-              <Polyline
-                key={type}
-                path={getRouteCoordinates(type)}
-                strokeColor="#0000FF"
-                strokeOpacity={0.8}
-                strokeWeight={2}
+  google={google}
+  zoom={15}
+  style={mapStyles}
+  initialCenter={{ lat: -33.367613, lng: -70.738301 }}
+  onClick={handleMapClick}
+>
+<div style={{
+    position: 'absolute',
+    top: '10px',
+    left: '10px',
+    backgroundColor: 'white',
+    padding: '10px',
+    borderRadius: '5px',
+    maxHeight: '600px', // Altura máxima definida, cambiar según sea necesario
+    overflowY: 'auto' // Agrega scrollbar si el contenido excede la altura máxima
+  }}>
+    <table>
+      <tbody>
+        {markerTypes.map(type => (
+          <tr key={type}>
+            <td>{type}:</td>
+            <td>
+              <input
+                type="checkbox"
+                checked={markerVisibility[type]}
+                onChange={e => handleMarkerVisibilityChange(type, e)}
               />
-            );
-          }
-          return null;
-        })}
-        <Dialog
-          open={open}
-          onClose={handleClose}
-          PaperProps={{ style: { backgroundColor: '#f5f5f5', borderRadius: 12} }}
-        >
-          <DialogTitle style={{ textAlign: 'center' }}>{selectedMarker?.type}</DialogTitle>
-          <DialogContent>
-            <DialogContentText>Latitude: {selectedMarker?.lat}</DialogContentText>
-            <DialogContentText>Longitude: {selectedMarker?.lng}</DialogContentText>
-          </DialogContent>
-          <DialogActions style={{justifyContent:"center"}}>
-            {editMode && (
-              <Button onClick={handleDeleteMarker} color="secondary" variant="contained">
-                Eliminar Marcador
-              </Button>
-            )}
-          </DialogActions>
-        </Dialog>
-      </Map>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+  
+  {markers.map((marker, index) => {
+    const isVisible = markerVisibility[marker.type];
+    if (!isVisible) return null;
+
+    return (
+      <Marker
+        key={marker.id}
+        id={marker.id}
+        position={{ lat: marker.lat, lng: marker.lng }}
+        icon={{
+          url: 
+            marker.type === "MUFA" 
+              ? "https://maps.google.com/mapfiles/ms/icons/red-dot.png" 
+              : marker.type === "NAP" 
+                ? "https://maps.google.com/mapfiles/ms/icons/yellow-dot.png" 
+                : "https://maps.google.com/mapfiles/ms/icons/blue-dot.png",  // Este es tu valor por defecto
+        }}
+        draggable={editMode}
+        onClick={() => handleClickOpen(marker)}
+        onDragend={(mapProps, map, dragEvent) =>
+          handleMarkerDragEnd(marker, mapProps, map, dragEvent)
+        }
+      ></Marker>
+    );
+  })}
+  
+  {markerTypes.map(type => {
+    if (markerVisibility[type] && type !== "MUFA" && type !== "NAP") {
+      return (
+        <Polyline
+          key={type}
+          path={getRouteCoordinates(type)}
+          strokeColor="#0000FF"
+          strokeOpacity={0.8}
+          strokeWeight={2}
+        />
+      );
+    }
+    return null;
+  })}
+  
+  <Dialog
+    open={open}
+    onClose={handleClose}
+    PaperProps={{ style: { backgroundColor: '#f5f5f5', borderRadius: 12} }}
+  >
+    <DialogTitle style={{ textAlign: 'center' }}>{selectedMarker?.type}</DialogTitle>
+    <DialogContent>
+      <DialogContentText>Latitude: {selectedMarker?.lat}</DialogContentText>
+      <DialogContentText>Longitude: {selectedMarker?.lng}</DialogContentText>
+    </DialogContent>
+    <DialogActions style={{justifyContent:"center"}}>
+      {editMode && (
+        <Button onClick={handleDeleteMarker} color="secondary" variant="contained">
+          Eliminar Marcador
+        </Button>
+      )}
+    </DialogActions>
+  </Dialog>
+</Map>
+
     </div>
   );
 }
