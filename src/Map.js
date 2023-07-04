@@ -159,11 +159,21 @@ function MapContainer({ google }) {
     setSelectedMarkerType(event.target.value);
   };
 
-  const handleMarkerVisibilityChange = (type, event) => {
-    setMarkerVisibility(prevMarkerVisibility => ({
-      ...prevMarkerVisibility,
-      [type]: event.target.checked
-    }));
+  const handleMarkerVisibilityChange = (type, e) => {
+    if (type === 'RUTA SIN TITULO') {
+      const newVisibility = { ...markerVisibility };
+      for (let markerType in newVisibility) {
+        if (markerType.includes('RUTA SIN TITULO')) {
+          newVisibility[markerType] = e.target.checked;
+        }
+      }
+      setMarkerVisibility(newVisibility);
+    } else {
+      setMarkerVisibility({
+        ...markerVisibility,
+        [type]: e.target.checked,
+      });
+    }
   };
 
   const getRouteCoordinates = type => {
@@ -229,18 +239,20 @@ function MapContainer({ google }) {
   }}>
     <table>
       <tbody>
-        {markerTypes.map(type => (
-          <tr key={type}>
-            <td>{type}:</td>
-            <td>
-              <input
-                type="checkbox"
-                checked={markerVisibility[type]}
-                onChange={e => handleMarkerVisibilityChange(type, e)}
-              />
-            </td>
-          </tr>
-        ))}
+        {
+          [...new Set(markerTypes.map(type => type.includes('RUTA SIN TITULO') ? 'RUTA SIN TITULO' : type))].map(uniqueType => (
+            <tr key={uniqueType}>
+              <td>{uniqueType}:</td>
+              <td>
+                <input
+                  type="checkbox"
+                  checked={markerVisibility[uniqueType]}
+                  onChange={e => handleMarkerVisibilityChange(uniqueType, e)}
+                />
+              </td>
+            </tr>
+          ))
+        }
       </tbody>
     </table>
   </div>
