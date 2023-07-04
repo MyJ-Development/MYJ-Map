@@ -1,10 +1,20 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Map, Marker, Polyline, GoogleApiWrapper } from "google-maps-react";
 import axios from 'axios';
-import { Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button } from '@material-ui/core';
+import { Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button} from '@material-ui/core';
+import ToggleButton from '@mui/material/ToggleButton';
 import withReactContent from 'sweetalert2-react-content';
 import Swal from 'sweetalert2';
 import _ from 'lodash';
+import Switch from '@mui/material/Switch';
+import FormGroup from '@mui/material/FormGroup';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import Box from '@mui/material/Box';
+import InputLabel from '@mui/material/InputLabel';
+import MenuItem from '@mui/material/MenuItem';
+import FormControl from '@mui/material/FormControl';
+import Select, { SelectChangeEvent } from '@mui/material/Select';
+import Checkbox from '@mui/material/Checkbox';
 
 const API_URL = process.env.REACT_APP_API_URL;
 const apiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
@@ -243,30 +253,41 @@ function MapContainer({ google }) {
 >
 <div style={{
     position: 'absolute',
-    top: '10px',
+    top: '100px',
     left: '10px',
     backgroundColor: 'white',
     padding: '10px',
     borderRadius: '5px',
-    maxHeight: '600px', // Altura máxima definida, cambiar según sea necesario
-    overflowY: 'auto' // Agrega scrollbar si el contenido excede la altura máxima
+    maxHeight: '600px',
+    overflowY: 'auto'
   }}>
-          <button onClick={toggleEditMode}>
-        {editMode ? "Guardar cambios" : "Entrar en modo edición"}
-      </button>
-      <select value={selectedMarkerType} onChange={handleMarkerTypeChange} disabled={!editMode}>
-        <option value="">Seleccionar tipo de marcador</option>
+
+      <FormGroup>
+        <FormControlLabel control={<Switch
+        checked={editMode}
+        onChange={toggleEditMode}
+        color="primary"
+      />} label="Modo Edicion" />
+      </FormGroup>
+      <FormControl fullWidth>
+      <InputLabel >Seleccionar tipo de marcador</InputLabel>
+      <Select
+        autoWidth={true}
+        value={selectedMarkerType}
+        onChange={handleMarkerTypeChange}
+        disabled={!editMode}
+      >
         {markerTypes.map(type => (
-          <option key={type} value={type}>{type}</option>
+          <MenuItem key={type} value={type}>{type}</MenuItem>
         ))}
-      </select>
-      <div>
-        <h3>Ocultar/Mostrar Marcadores</h3>
-      </div>
-      <div>
-        <button onClick={handleAddMarkerType}>Agregar Tipo de Marcador</button>
-      </div>
-    <button onClick={handleHideAll}>Ocultar todos</button>
+      </Select>
+    </FormControl>
+    <div style={{ padding: "5px"}}>
+      <Button variant="contained" onClick={handleAddMarkerType}>Agregar Tipo de Marcador</Button>
+    </div>
+    <div style={{ padding: "5px"}}>
+      <Button variant="contained" onClick={handleHideAll} style={{ padding: '3px' }}>Ocultar todos</Button>
+    </div>
     <table>
       <tbody>
         {
