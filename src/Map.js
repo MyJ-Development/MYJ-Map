@@ -23,7 +23,13 @@ function MapContainer({ google }) {
     loadMarkersFromAPI();
     loadMarkerTypesFromAPI();
   }, []);
-
+  const handleHideAll = () => {
+    const newVisibility = { ...markerVisibility };
+    for (let type in newVisibility) {
+      newVisibility[type] = false;
+    }
+    setMarkerVisibility(newVisibility);
+  };
   useEffect(() => {
     const visibility = {};
     markerTypes.forEach(type => {
@@ -237,6 +243,7 @@ function MapContainer({ google }) {
     maxHeight: '600px', // Altura máxima definida, cambiar según sea necesario
     overflowY: 'auto' // Agrega scrollbar si el contenido excede la altura máxima
   }}>
+    <button onClick={handleHideAll}>Ocultar todos</button>
     <table>
       <tbody>
         {
@@ -272,7 +279,8 @@ function MapContainer({ google }) {
               ? "https://maps.google.com/mapfiles/ms/icons/red-dot.png" 
               : marker.type === "NAP" 
                 ? "https://maps.google.com/mapfiles/ms/icons/yellow-dot.png" 
-                : "https://maps.google.com/mapfiles/ms/icons/blue-dot.png",  // Este es tu valor por defecto
+                : "https://maps.google.com/mapfiles/ms/icons/blue-dot.png",
+                scaledSize: new window.google.maps.Size(20, 20),  // Este es tu valor por defecto
         }}
         draggable={editMode}
         onClick={() => handleClickOpen(marker)}
