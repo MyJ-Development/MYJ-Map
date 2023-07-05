@@ -13,6 +13,12 @@ RUN npm install
 # Copia los archivos del proyecto
 COPY . .
 
+# Agrega las variables de entorno
+ARG REACT_APP_GOOGLE_MAPS_API_KEY
+ARG REACT_APP_API_URL
+ENV REACT_APP_GOOGLE_MAPS_API_KEY=$REACT_APP_GOOGLE_MAPS_API_KEY
+ENV REACT_APP_API_URL=$REACT_APP_API_URL
+
 # Construye la aplicación de React
 RUN npm run build
 
