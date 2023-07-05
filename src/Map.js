@@ -56,7 +56,7 @@ function MapContainer({ google }) {
       setTreeData(newTreeData);
     }
   }, [markerTypes]);
-  
+
   useEffect(() => {
     loadMarkersFromAPI();
     loadMarkerTypesFromAPI();
@@ -95,7 +95,7 @@ function MapContainer({ google }) {
     setMarkerVisibility(newVisibility);
     setAllVisible(!allVisible); // toggle the allVisible state
     console.log(newVisibility);
-    if(!allVisible){
+    if (!allVisible) {
       setSelectedNodeKeys(null);
     } else {
       let auxAllKeys = getAllKeys(treeData)
@@ -385,10 +385,8 @@ function MapContainer({ google }) {
       }
     }
     setMarkerVisibility(visibilityUpdates);
-  
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNodeKeys]);
-  
-  
 
   const getRouteCoordinates = type => {
     const routeMarkers = markers.filter(marker => marker.type === type);
@@ -433,37 +431,49 @@ function MapContainer({ google }) {
     // Clasifica los marcadores en marcadores principales y subrutas
     const mainMarkers = markers?.filter(marker => !/_sub_\d+$/.test(marker));
     const subRoutes = markers?.filter(marker => /_sub_\d+$/.test(marker));
-    //remove duplicates from subroutes and main markers
-    const uniquesubRoutes = subRoutes?.filter((subroute, index, self) =>
-      index === self.findIndex((t) => (
-        t === subroute
-      ))
-    )
-    const uniquemainMarkers = mainMarkers?.filter((marker, index, self) =>
-      !marker?.includes('RUTA SIN TITULO') &&
-      index === self.findIndex((t) => (
-        t === marker
-      ))
-    )
-
-    return uniquemainMarkers?.map((marker, markerIndex) => {
+  
+    // Remove duplicates from subroutes and main markers
+    const uniquesubRoutes = [...new Set(subRoutes)];
+    const uniquemainMarkers = [...new Set(mainMarkers)];
+  
+    // Separar rutas sin título
+    const titledRoutes = uniquemainMarkers.filter(marker => !marker.includes('RUTA SIN TITULO'));
+    const untitledRoutes = uniquemainMarkers.filter(marker => marker.includes('RUTA SIN TITULO'));
+  
+    // Agregar rutas sin título como subrutas de 'RUTA SIN TITULO'
+    let sinTituloSubRoutes = uniquesubRoutes.filter(subroute => subroute.includes('RUTA SIN TITULO'));
+    sinTituloSubRoutes = sinTituloSubRoutes.concat(untitledRoutes);
+  
+    return titledRoutes.map((marker, markerIndex) => {
       // Para cada marcador principal, busca sus subrutas
-      const markerSubRoutes = uniquesubRoutes?.filter(subroute => subroute.startsWith(marker));
-
+      const markerSubRoutes = uniquesubRoutes.filter(subroute => subroute.startsWith(marker));
+  
       return {
         key: `${marker}`,
         label: marker,
         data: `${marker} Folder`,
         icon: "pi pi-circle-fill",
-        children: markerSubRoutes?.map((subroute, subrouteIndex) => ({
+        children: markerSubRoutes.map((subroute, subrouteIndex) => ({
           key: `${subroute}`,
           label: subroute,
           data: `${subroute} Folder`,
           icon: 'pi pi-fw pi-cog' // El icono puede ser personalizado según tus necesidades.
         }))
       }
-    });
+    }).concat([{
+      key: 'RUTA SIN TITULO',
+      label: 'RUTA SIN TITULO',
+      data: 'RUTA SIN TITULO Folder',
+      icon: "pi pi-circle-fill",
+      children: sinTituloSubRoutes.map((subroute, subrouteIndex) => ({
+        key: `${subroute}`,
+        label: subroute,
+        data: `${subroute} Folder`,
+        icon: 'pi pi-fw pi-cog' // El icono puede ser personalizado según tus necesidades.
+      }))
+    }]);
   };
+  
 
   const mapStyles = {
     width: "100%",
@@ -486,6 +496,7 @@ function MapContainer({ google }) {
           backgroundColor: 'white',
           padding: '10px',
           borderRadius: '5px',
+          border: '1px solid black'
         }}>
           <Button variant="outlined" onClick={() => setMenuVisible(!menuVisible)}>Ocultar/Mostrar</Button>
           <Button variant="contained" onClick={() => setMeasurementMode(!measurementMode)}>
@@ -507,7 +518,8 @@ function MapContainer({ google }) {
             padding: '10px',
             borderRadius: '5px',
             maxHeight: '400px',
-            overflowY: 'auto'
+            overflowY: 'auto',
+            border: '1px solid black'
           }}>
 
             <FormGroup>
@@ -527,6 +539,7 @@ function MapContainer({ google }) {
 
             <div style={{ padding: "5px" }} className="flex align-items-center">
               <Checkbox
+                disabled={!editMode}
                 checked={isSubroute}
                 onChange={(e) => setIsSubroute(e.target.checked)}
               >
@@ -539,19 +552,20 @@ function MapContainer({ google }) {
                 <InputText
                   placeholder="Nombre marcador"
                   value={newMarkerType}
+                  disabled={!editMode}
                   onChange={(e) => setNewMarkerType(e.target.value)}
                 />
               )}
               <div style={{ padding: "5px" }}>
-                <Button variant="contained" onClick={handleAddMarkerType}>
+                <Button disabled={!editMode} variant="contained" onClick={handleAddMarkerType}>
                   Agregar Tipo de Marcador
                 </Button>
               </div>
             </div>
             <div style={{ padding: "5px" }}>
-            <Button variant="contained" onClick={handleToggleVisibility} style={{ padding: '3px' }}>
-              {allVisible ?  'Mostrar todos' :  'Ocultar todos'}
-            </Button>
+              <Button variant="contained" onClick={handleToggleVisibility} style={{ padding: '3px' }}>
+                {allVisible ? 'Mostrar todos' : 'Ocultar todos'}
+              </Button>
             </div>
             {treeData && <TreeSelect
               value={selectedNodeKeys}
@@ -562,7 +576,7 @@ function MapContainer({ google }) {
               selectionMode="checkbox"
               className="md:w-20rem w-full"
               placeholder="Ocultar/Mostrar"
-              
+
             />}
 
           </div>)}
