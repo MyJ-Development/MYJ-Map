@@ -8,12 +8,9 @@ import _ from 'lodash';
 import Switch from '@mui/material/Switch';
 import FormGroup from '@mui/material/FormGroup';
 import FormControlLabel from '@mui/material/FormControlLabel';
-import MenuItem from '@mui/material/MenuItem';
-import Select from '@mui/material/Select';
 import Backdrop from '@mui/material/Backdrop';
 import CircularProgress from '@mui/material/CircularProgress';
 import Input from "@material-ui/core/Input";
-import { Table, TableBody, TableCell, TableContainer, TableRow, Paper } from '@material-ui/core';
 import { TreeSelect } from 'primereact/treeselect';
 import 'primereact/resources/themes/lara-light-indigo/theme.css';
 import 'primereact/resources/primereact.css';
@@ -39,7 +36,6 @@ function MapContainer({ google }) {
   const [modifiedMarkers, setModifiedMarkers] = useState([]);
   const [loading, setLoading] = useState(false);
   const inputRef = useRef();
-  const uniqueTypes = [...new Set(markerTypes.map(type => type && type.includes('RUTA SIN TITULO') ? 'RUTA SIN TITULO' : type))];
   const [menuVisible, setMenuVisible] = useState(true);
   const [measurementMode, setMeasurementMode] = useState(false);
   const [measurementDistance, setMeasurementDistance] = useState(0);
@@ -51,15 +47,16 @@ function MapContainer({ google }) {
   const [isSubroute, setIsSubroute] = useState(false);
   const [parentRoute, setParentRoute] = useState('');
   const [subrouteCounters, setSubrouteCounters] = useState({});
-  //useState const treeData = transformMarkersToTreeData(markerData);
+  const [allVisible, setAllVisible] = useState(false);
   const [treeData, setTreeData] = useState(null);
+  const [selectedNodeKeys, setSelectedNodeKeys] = useState(null);
   useEffect(() => {
     if (markerTypes.length > 0) {
       const newTreeData = transformMarkersToTreeData(markerTypes);
       setTreeData(newTreeData);
     }
   }, [markerTypes]);
-
+  
   useEffect(() => {
     loadMarkersFromAPI();
     loadMarkerTypesFromAPI();
@@ -90,12 +87,24 @@ function MapContainer({ google }) {
     return distance;
   };
 
-  const handleHideAll = () => {
+  const handleToggleVisibility = () => {
     const newVisibility = { ...markerVisibility };
     for (let type in newVisibility) {
-      newVisibility[type] = false;
+      newVisibility[type] = allVisible; // set visibility according to the allVisible state
     }
     setMarkerVisibility(newVisibility);
+    setAllVisible(!allVisible); // toggle the allVisible state
+    console.log(newVisibility);
+    if(!allVisible){
+      setSelectedNodeKeys(null);
+    } else {
+      let auxAllKeys = getAllKeys(treeData)
+      let aux = {}
+      auxAllKeys.forEach((key) => {
+        aux[key] = { checked: true }
+      });
+      setSelectedNodeKeys(aux);
+    }
   };
   useEffect(() => {
     const visibility = {};
@@ -104,6 +113,8 @@ function MapContainer({ google }) {
     });
     setMarkerVisibility(visibility);
   }, [markerTypes]);
+
+
   const retryRequest = async (requestFn, ...args) => {
     let attempts = 0;
     let error;
@@ -363,27 +374,19 @@ function MapContainer({ google }) {
   const handleMarkerTypeChange = event => {
     setSelectedMarkerType(event.target.value);
   };
-  const handleMarkerVisibilityChange = (newVisibility) => {
-    const visibilityUpdates = {};
-    console.log(newVisibility);
-    for (let key in newVisibility) {
-      if (newVisibility[key].checked) {
-        if (key === 'RUTA SIN TITULO') {
-          for (let markerType in markerVisibility) {
-            if (markerType?.includes('RUTA SIN TITULO')) {
-              visibilityUpdates[markerType] = true;
-            }
-          }
-        } else {
-          visibilityUpdates[key] = true;
-        }
+
+  useEffect(() => {
+    const visibilityUpdates = { ...markerVisibility };
+
+    if (selectedNodeKeys) {
+      for (let key of Object.keys(markerVisibility)) {
+        let auxKey = key.toString();
+        visibilityUpdates[key] = selectedNodeKeys[auxKey]?.checked;
       }
     }
-    setMarkerVisibility({
-      ...markerVisibility,
-      ...visibilityUpdates,
-    });
-  };
+    setMarkerVisibility(visibilityUpdates);
+  
+  }, [selectedNodeKeys]);
   
   
 
@@ -519,19 +522,6 @@ function MapContainer({ google }) {
                 label={editMode ? "Guardar" : "Modo Edición"}
               />
             </FormGroup>
-            {/* <FormControl fullWidth>
-              <InputLabel >Seleccionar tipo de marcador</InputLabel>
-              <Select
-                autoWidth={true}
-                value={selectedMarkerType}
-                onChange={handleMarkerTypeChange}
-                disabled={!editMode}
-              >
-                {markerTypes.map(type => (
-                  !type?.includes('RUTA SIN TITULO') && <MenuItem key={type} value={type}>{type}</MenuItem>
-                ))}
-              </Select>
-            </FormControl> */}
             <TreeSelect disabled={!editMode} value={selectedMarkerType} onChange={(event) => handleMarkerTypeChange(event)} options={treeData}
               filter className="md:w-20rem w-full" placeholder="Marcadores"></TreeSelect>
 
@@ -559,36 +549,20 @@ function MapContainer({ google }) {
               </div>
             </div>
             <div style={{ padding: "5px" }}>
-              <Button variant="contained" onClick={handleHideAll} style={{ padding: '3px' }}>Ocultar todos</Button>
+            <Button variant="contained" onClick={handleToggleVisibility} style={{ padding: '3px' }}>
+              {allVisible ?  'Mostrar todos' :  'Ocultar todos'}
+            </Button>
             </div>
-            {/* <TableContainer component={Paper}>
-              <Table>
-                <TableBody>
-                  {
-                    uniqueTypes.map(uniqueType => (
-                      <TableRow key={uniqueType}>
-                        <TableCell>{uniqueType}:</TableCell>
-                        <TableCell>
-                          <input
-                            type="checkbox"
-                            checked={markerVisibility[uniqueType]}
-                            onChange={e => handleMarkerVisibilityChange(uniqueType, e)}
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  }
-                </TableBody>
-              </Table>
-            </TableContainer> */}
             {treeData && <TreeSelect
-              value={getAllKeys(treeData)}
-              onChange={(e) => handleMarkerVisibilityChange(e.value)}
+              value={selectedNodeKeys}
+              onChange={(e) => setSelectedNodeKeys(e.value)}
               options={treeData}
               filter
+              metaKeySelection={false}
               selectionMode="checkbox"
               className="md:w-20rem w-full"
               placeholder="Ocultar/Mostrar"
+              
             />}
 
           </div>)}
