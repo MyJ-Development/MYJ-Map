@@ -2,19 +2,18 @@ import React, { useState, useEffect, useCallback } from "react";
 import { Map, Marker, Polyline, GoogleApiWrapper } from "google-maps-react";
 import axios from 'axios';
 import { Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button} from '@material-ui/core';
-import ToggleButton from '@mui/material/ToggleButton';
 import withReactContent from 'sweetalert2-react-content';
 import Swal from 'sweetalert2';
 import _ from 'lodash';
 import Switch from '@mui/material/Switch';
 import FormGroup from '@mui/material/FormGroup';
 import FormControlLabel from '@mui/material/FormControlLabel';
-import Box from '@mui/material/Box';
 import InputLabel from '@mui/material/InputLabel';
 import MenuItem from '@mui/material/MenuItem';
 import FormControl from '@mui/material/FormControl';
-import Select, { SelectChangeEvent } from '@mui/material/Select';
-import Checkbox from '@mui/material/Checkbox';
+import Select from '@mui/material/Select';
+import Backdrop from '@mui/material/Backdrop';
+import CircularProgress from '@mui/material/CircularProgress';
 
 const API_URL = process.env.REACT_APP_API_URL;
 const apiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
@@ -30,7 +29,7 @@ function MapContainer({ google }) {
   const MySwal = withReactContent(Swal);
   const [markerTypes, setMarkerTypes] = useState([]);
   const [modifiedMarkers, setModifiedMarkers] = useState([]);
-  
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     loadMarkersFromAPI();
@@ -52,43 +51,53 @@ function MapContainer({ google }) {
   }, [markerTypes]);
 
   const loadMarkersFromAPI = async () => {
+    setLoading(true);
     try {
       const response = await axios.get(`${API_URL}/markers`);
       const markers = response.data;
-      //add property draggable to each marker
       markers.forEach(marker => {
         marker.draggable = false;
       });
-
       setMarkers(markers);
     } catch (err) {
       console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
   const loadMarkerTypesFromAPI = async () => {
+    setLoading(true);
     try {
       const response = await axios.get(`${API_URL}/marker-types`);
       const types = response.data;
       setMarkerTypes(types);
     } catch (err) {
       console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
   const updateMarkerInAPI = async marker => {
+    setLoading(true);
     try {
       await axios.put(`${API_URL}/markers/${marker.id}`, marker);
     } catch (err) {
       console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
   const deleteMarkerInAPI = async id => {
+    setLoading(true);
     try {
       await axios.delete(`${API_URL}/markers/${id}`);
     } catch (err) {
       console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -106,11 +115,14 @@ function MapContainer({ google }) {
   };
 
   const createMarkerInAPI = async marker => {
+    setLoading(true);
     try {
       const response = await axios.post(`${API_URL}/markers`, marker);
       marker.id = response.data.id;
     } catch (err) {
       console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -180,6 +192,7 @@ function MapContainer({ google }) {
   const toggleEditMode = useCallback(() => {
     setEditMode(prevEditMode => {
       if (prevEditMode) {
+        setLoading(true);
         modifiedMarkers.forEach(marker => {
           if (marker.id) {
             updateMarkerInAPI(marker);
@@ -188,6 +201,7 @@ function MapContainer({ google }) {
           } 
         });
         setModifiedMarkers([]);
+        setLoading(false);
       }
       return !prevEditMode;
     });
@@ -263,11 +277,16 @@ function MapContainer({ google }) {
   }}>
 
       <FormGroup>
-        <FormControlLabel control={<Switch
-        checked={editMode}
-        onChange={toggleEditMode}
-        color="primary"
-      />} label="Modo Edicion" />
+        <FormControlLabel
+          control={
+            <Switch
+              checked={editMode}
+              onChange={toggleEditMode}
+              color="primary"
+            />
+          }
+          label={editMode ? "Guardar" : "Modo Edición"}
+        />
       </FormGroup>
       <FormControl fullWidth>
       <InputLabel >Seleccionar tipo de marcador</InputLabel>
@@ -278,7 +297,7 @@ function MapContainer({ google }) {
         disabled={!editMode}
       >
         {markerTypes.map(type => (
-          <MenuItem key={type} value={type}>{type}</MenuItem>
+          !type.includes('RUTA SIN TITULO') && <MenuItem key={type} value={type}>{type}</MenuItem>
         ))}
       </Select>
     </FormControl>
@@ -368,7 +387,12 @@ function MapContainer({ google }) {
     </DialogActions>
   </Dialog>
 </Map>
-
+    <Backdrop
+          sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 1 }}
+          open={loading}
+        >
+      <CircularProgress color="inherit" />
+    </Backdrop>
     </div>
   );
 }
