@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Map, Marker, Polyline, GoogleApiWrapper } from "google-maps-react";
 import axios from 'axios';
 import { Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button} from '@material-ui/core';
@@ -14,7 +14,7 @@ import FormControl from '@mui/material/FormControl';
 import Select from '@mui/material/Select';
 import Backdrop from '@mui/material/Backdrop';
 import CircularProgress from '@mui/material/CircularProgress';
-
+import Input from "@material-ui/core/Input";
 const API_URL = process.env.REACT_APP_API_URL;
 const apiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
 
@@ -30,11 +30,20 @@ function MapContainer({ google }) {
   const [markerTypes, setMarkerTypes] = useState([]);
   const [modifiedMarkers, setModifiedMarkers] = useState([]);
   const [loading, setLoading] = useState(false);
-
+  const inputRef = useRef();
+  
   useEffect(() => {
     loadMarkersFromAPI();
     loadMarkerTypesFromAPI();
   }, []);
+  const handleSave = () => {
+    const newDescription = inputRef.current.value;
+    let markerToUpdate = ""
+    markerToUpdate = { ...selectedMarker, description: newDescription };
+    handleSaveChanges(markerToUpdate);
+    handleClose();
+  };
+
   const handleHideAll = () => {
     const newVisibility = { ...markerVisibility };
     for (let type in newVisibility) {
@@ -100,7 +109,20 @@ function MapContainer({ google }) {
       setLoading(false);
     }
   };
+  const handleSaveChanges = async (markerToUpdate) => {
+    try {
+      console.log(markerToUpdate);
+      await updateMarkerInAPI(markerToUpdate);
+    } catch (err) {
+      console.error(err);
+    }
+    setMarkers(prevMarkers =>
+      prevMarkers.map(m => (m.id === markerToUpdate.id ? markerToUpdate : m))
+    );
 
+    setSelectedMarker(null);
+    setOpen(false);
+  };
   const handleClickOpen = marker => {
     if (marker) {
       const updatedMarker = { ...marker, draggable: true }; // Invierte el valor de la propiedad draggable
@@ -370,22 +392,37 @@ function MapContainer({ google }) {
   })}
   
   <Dialog
-    open={open}
-    onClose={handleClose}
-    PaperProps={{ style: { backgroundColor: '#f5f5f5', borderRadius: 12} }}
-  >
-    <DialogTitle style={{ textAlign: 'center' }}>{selectedMarker?.type}</DialogTitle>
-    <DialogContent>
-      <DialogContentText>{selectedMarker?.description}</DialogContentText>
-    </DialogContent>
-    <DialogActions style={{justifyContent:"center"}}>
-      {editMode && (
-        <Button onClick={handleDeleteMarker} color="secondary" variant="contained">
-          Eliminar Marcador
-        </Button>
-      )}
-    </DialogActions>
-  </Dialog>
+      open={open}
+      onClose={handleClose}
+      PaperProps={{ style: { backgroundColor: '#f5f5f5', borderRadius: 12} }}
+    >
+      <DialogTitle style={{ textAlign: 'center' }}>{selectedMarker?.type}</DialogTitle>
+      <DialogContent>
+        {editMode ? (
+            <Input
+            autoFocus
+            fullWidth
+            defaultValue={selectedMarker?.description}
+            inputRef={inputRef}
+          />
+        ) : (
+          <DialogContentText>{selectedMarker?.description}</DialogContentText>
+        )}
+      </DialogContent>
+      <DialogActions style={{justifyContent:"center"}}>
+        {editMode && (
+          
+          <Button onClick={handleSave} color="primary" variant="contained">
+            Guardar
+          </Button>
+        )}
+        {editMode && (
+          <Button onClick={handleDeleteMarker} color="secondary" variant="contained">
+            Eliminar Marcador
+          </Button>
+        )}
+      </DialogActions>
+    </Dialog>
 </Map>
     <Backdrop
           sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 1 }}
