@@ -34,6 +34,7 @@ function MapContainer({ google }) {
   const [loading, setLoading] = useState(false);
   const inputRef = useRef();
   const uniqueTypes = [...new Set(markerTypes.map(type => type && type.includes('RUTA SIN TITULO') ? 'RUTA SIN TITULO' : type))];
+  const [menuVisible, setMenuVisible] = useState(true);
 
   useEffect(() => {
     loadMarkersFromAPI();
@@ -302,8 +303,21 @@ function MapContainer({ google }) {
 >
 <div style={{
     position: 'absolute',
+    top: '1px',
+    left: '200px',
+    backgroundColor: 'white',
+    padding: '10px',
+    borderRadius: '5px',
+  }}>
+  <Button variant="outlined"  onClick={() => setMenuVisible(!menuVisible)}>Ocultar/Mostrar</Button>
+  
+</div>
+
+{menuVisible && (
+<div style={{
+    position: 'absolute',
     top: '100px',
-    left: '10px',
+    left: '15px',
     backgroundColor: 'white',
     padding: '10px',
     borderRadius: '5px',
@@ -362,7 +376,7 @@ function MapContainer({ google }) {
         </TableBody>
       </Table>
     </TableContainer>
-  </div>
+  </div> )}
   
   {markers.map((marker, index) => {
     const isVisible = markerVisibility[marker.type];
