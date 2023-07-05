@@ -35,6 +35,12 @@ function MapContainer({ google }) {
   const inputRef = useRef();
   const uniqueTypes = [...new Set(markerTypes.map(type => type && type.includes('RUTA SIN TITULO') ? 'RUTA SIN TITULO' : type))];
   const [menuVisible, setMenuVisible] = useState(true);
+  const [measurementMode, setMeasurementMode] = useState(false);
+  const [measurementDistance, setMeasurementDistance] = useState(0);
+  const [measurementMarkers, setMeasurementMarkers] = useState([]);
+  const [temporaryMarkers, setTemporaryMarkers] = useState([]);
+  const [measurementPath, setMeasurementPath] = useState([]);
+  const [measurementPolyline, setMeasurementPolyline] = useState(null);
 
   useEffect(() => {
     loadMarkersFromAPI();
@@ -46,6 +52,23 @@ function MapContainer({ google }) {
     markerToUpdate = { ...selectedMarker, description: newDescription };
     handleSaveChanges(markerToUpdate);
     handleClose();
+  };
+  const calculateDistance = (point1, point2) => {
+    const lat1 = point1.lat();
+    const lng1 = point1.lng();
+    const lat2 = point2.lat();
+    const lng2 = point2.lng();
+  
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const distance = 6371 * c; // Radio de la Tierra en kilómetros
+  
+    return distance;
   };
   
   const handleHideAll = () => {
@@ -181,23 +204,58 @@ function MapContainer({ google }) {
   };
 
   const handleMapClick = (mapProps, map, clickEvent) => {
-    if (!editMode) return; 
-    if (!selectedMarkerType) return;
+    if (measurementMode) {
+      const { latLng } = clickEvent;
+      const lastMarker = measurementMarkers[measurementMarkers.length - 1];
+      if (lastMarker) {
+        const distance = calculateDistance(lastMarker.latLng, latLng);
+        setMeasurementDistance(prevDistance => prevDistance + distance);
+      }
+      setMeasurementMarkers(prevMarkers => [...prevMarkers, { latLng }]);
+      
+      // Crear marcador temporal
+      const temporaryMarker = new google.maps.Marker({
+        position: latLng,
+        map: map,
+        icon: {
+          url: "https://maps.google.com/mapfiles/ms/icons/green-dot.png",
+          scaledSize: new window.google.maps.Size(20, 20),
+        },
+      });
+      setTemporaryMarkers(prevMarkers => [...prevMarkers, temporaryMarker]);
+      setMeasurementPath(prevPath => [...prevPath, latLng]);
 
-    const { latLng } = clickEvent;
-    const lat = latLng.lat();
-    const lng = latLng.lng();
-    const newMarker = {
-      lat,
-      lng,
-      type: selectedMarkerType,
-      draggable: true
-    };
-    setMarkers(prevMarkers => [...prevMarkers, newMarker]);
-    //append new marker to modifiedMarkers
-    setModifiedMarkers(prevModifiedMarkers => [...prevModifiedMarkers, newMarker]);
-
+        // Dibujar polilínea
+    if (measurementPolyline) {
+      measurementPolyline.setPath(measurementPath.concat(latLng));
+    } else {
+      const newPolyline = new google.maps.Polyline({
+        path: measurementPath.concat(latLng),
+        geodesic: true,
+        strokeColor: "#FF0000",
+        strokeOpacity: 1.0,
+        strokeWeight: 2,
+      });
+      newPolyline.setMap(map);
+      setMeasurementPolyline(newPolyline);
+    }
+    } else if (editMode && selectedMarkerType) {
+      const { latLng } = clickEvent;
+      const lat = latLng.lat();
+      const lng = latLng.lng();
+      const newMarker = {
+        lat,
+        lng,
+        type: selectedMarkerType,
+        draggable: true,
+      };
+      setMarkers(prevMarkers => [...prevMarkers, newMarker]);
+      setModifiedMarkers(prevModifiedMarkers => [...prevModifiedMarkers, newMarker]);
+    }
+    
   };
+  
+  
 
   const handleMarkerDragEnd = useCallback((marker, mapProps, map, dragEvent) => {
     const { latLng } = dragEvent;
@@ -220,6 +278,18 @@ function MapContainer({ google }) {
   }, [modifiedMarkers]);
 
   const debouncedHandleMarkerDragEnd = _.debounce(handleMarkerDragEnd, 200);
+
+
+  useEffect(() => {
+      setMeasurementDistance(0);
+      setMeasurementMarkers([]);
+      temporaryMarkers.forEach(marker => marker.setMap(null));
+      setTemporaryMarkers([]);
+      setMeasurementPath([]);
+      measurementPolyline?.setMap(null);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [measurementMode]);
+
 
   const toggleEditMode = useCallback(() => {
     let markerToCreate = [];
@@ -310,7 +380,14 @@ function MapContainer({ google }) {
     borderRadius: '5px',
   }}>
   <Button variant="outlined"  onClick={() => setMenuVisible(!menuVisible)}>Ocultar/Mostrar</Button>
-  
+  <Button variant="contained" onClick={() => setMeasurementMode(!measurementMode)}>
+  {measurementMode ? 'Terminar medición' : 'Iniciar medición'}
+  </Button>
+      {measurementMode && (
+      <div>
+        <div>Distancia acumulada: {measurementDistance.toFixed(2)} km</div>
+      </div>
+    )}
 </div>
 
 {menuVisible && (
@@ -404,7 +481,16 @@ function MapContainer({ google }) {
       ></Marker>
     );
   })}
-  
+  {measurementMode && temporaryMarkers.map((marker, index) => (
+      <Marker
+        key={index}
+        position={marker.getPosition()}
+        icon={{
+          url: "https://maps.google.com/mapfiles/ms/icons/green-dot.png",
+          scaledSize: new window.google.maps.Size(20, 20),
+        }}
+      />
+    ))}
   {markerTypes.map(type => {
     if (markerVisibility[type] && type !== "MUFA" && type !== "NAP") {
       return (
@@ -412,7 +498,7 @@ function MapContainer({ google }) {
           key={type}
           path={getRouteCoordinates(type)}
           strokeColor="#0000FF"
-          strokeOpacity={0.8}
+          strokeOpacity={1}
           strokeWeight={1}
         />
       );
