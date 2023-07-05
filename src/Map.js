@@ -8,14 +8,20 @@ import _ from 'lodash';
 import Switch from '@mui/material/Switch';
 import FormGroup from '@mui/material/FormGroup';
 import FormControlLabel from '@mui/material/FormControlLabel';
-import InputLabel from '@mui/material/InputLabel';
 import MenuItem from '@mui/material/MenuItem';
-import FormControl from '@mui/material/FormControl';
 import Select from '@mui/material/Select';
 import Backdrop from '@mui/material/Backdrop';
 import CircularProgress from '@mui/material/CircularProgress';
 import Input from "@material-ui/core/Input";
 import { Table, TableBody, TableCell, TableContainer, TableRow, Paper } from '@material-ui/core';
+import { TreeSelect } from 'primereact/treeselect';
+import 'primereact/resources/themes/lara-light-indigo/theme.css';
+import 'primereact/resources/primereact.css';
+import 'primeicons/primeicons.css';
+import 'primeflex/primeflex.css';
+import { InputText } from 'primereact/inputtext';
+import { Checkbox } from 'primereact/checkbox';
+
 const API_URL = process.env.REACT_APP_API_URL;
 const apiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
 const MAX_ATTEMPTS = 3;
@@ -41,6 +47,18 @@ function MapContainer({ google }) {
   const [temporaryMarkers, setTemporaryMarkers] = useState([]);
   const [measurementPath, setMeasurementPath] = useState([]);
   const [measurementPolyline, setMeasurementPolyline] = useState(null);
+  const [newMarkerType, setNewMarkerType] = useState('');
+  const [isSubroute, setIsSubroute] = useState(false);
+  const [parentRoute, setParentRoute] = useState('');
+  const [subrouteCounters, setSubrouteCounters] = useState({});
+  //useState const treeData = transformMarkersToTreeData(markerData);
+  const [treeData, setTreeData] = useState(null);
+  useEffect(() => {
+    if (markerTypes.length > 0) {
+      const newTreeData = transformMarkersToTreeData(markerTypes);
+      setTreeData(newTreeData);
+    }
+  }, [markerTypes]);
 
   useEffect(() => {
     loadMarkersFromAPI();
@@ -100,6 +118,16 @@ function MapContainer({ google }) {
     // Si todos los intentos fallaron, lanza el último error capturado
     throw error;
   };
+  const getAllKeys = (treeData) => {
+    let keys = [];
+    treeData.forEach((node) => {
+      keys.push(node.key);
+      if (node.children) {
+        keys = [...keys, ...getAllKeys(node.children)];
+      }
+    });
+    return keys;
+  };
   const loadMarkersFromAPI = async () => {
     setLoading(true);
     try {
@@ -115,11 +143,27 @@ function MapContainer({ google }) {
       setLoading(false);
     }
   };
-  
+
   const loadMarkerTypesFromAPI = async () => {
     setLoading(true);
     try {
       const types = await retryRequest(() => axios.get(`${API_URL}/marker-types`));
+      const newCounters = {};
+      types.data.forEach((type) => {
+        const match = type.match(/(.*?)_sub_(\d+)$/);
+
+        // Si es una subruta
+        if (match) {
+          const route = match[1];
+          const count = parseInt(match[2]);
+
+          // Si es la primera subruta para esta ruta principal o es más grande que el contador existente, actualiza el contador
+          if (!newCounters[route] || count > newCounters[route]) {
+            newCounters[route] = count;
+          }
+        }
+      });
+      setSubrouteCounters(newCounters);
       setMarkerTypes(types.data);
     } catch (err) {
       console.error(err);
@@ -127,7 +171,6 @@ function MapContainer({ google }) {
       setLoading(false);
     }
   };
-  
   const updateMarkerInAPI = async marker => {
     setLoading(true);
     try {
@@ -138,7 +181,7 @@ function MapContainer({ google }) {
       setLoading(false);
     }
   };
-  
+
   const deleteMarkerInAPI = async id => {
     setLoading(true);
     try {
@@ -151,7 +194,6 @@ function MapContainer({ google }) {
   };
   const handleSaveChanges = async (markerToUpdate) => {
     try {
-      console.log(markerToUpdate);
       await updateMarkerInAPI(markerToUpdate);
     } catch (err) {
       console.error(err);
@@ -180,7 +222,6 @@ function MapContainer({ google }) {
     setLoading(true);
     try {
       for (let i of markerToCreate) {
-        console.log(i);
         const response = await axios.post(`${API_URL}/markers`, i);
         i.id = response.data.id;
       }
@@ -322,22 +363,30 @@ function MapContainer({ google }) {
   const handleMarkerTypeChange = event => {
     setSelectedMarkerType(event.target.value);
   };
-  const handleMarkerVisibilityChange = (type, e) => {
-    if (type === 'RUTA SIN TITULO') {
-      const newVisibility = { ...markerVisibility };
-      for (let markerType in newVisibility) {
-        if (markerType?.includes('RUTA SIN TITULO')) {
-          newVisibility[markerType] = e.target.checked;
+  const handleMarkerVisibilityChange = (newVisibility) => {
+    const visibilityUpdates = {};
+    console.log(newVisibility);
+    for (let key in newVisibility) {
+      if (newVisibility[key].checked) {
+        if (key === 'RUTA SIN TITULO') {
+          for (let markerType in markerVisibility) {
+            if (markerType?.includes('RUTA SIN TITULO')) {
+              visibilityUpdates[markerType] = true;
+            }
+          }
+        } else {
+          visibilityUpdates[key] = true;
         }
       }
-      setMarkerVisibility(newVisibility);
-    } else {
-      setMarkerVisibility({
-        ...markerVisibility,
-        [type]: e.target.checked,
-      });
     }
+    setMarkerVisibility({
+      ...markerVisibility,
+      ...visibilityUpdates,
+    });
   };
+  
+  
+
   const getRouteCoordinates = type => {
     const routeMarkers = markers.filter(marker => marker.type === type);
     return routeMarkers.map(marker => ({
@@ -346,13 +395,70 @@ function MapContainer({ google }) {
     }));
   };
   const handleAddMarkerType = () => {
-    const typeName = prompt("Ingrese el nombre del nuevo tipo de marcador:");
-    if (!typeName || typeName.trim() === "") {
+    if (isSubroute && !parentRoute) {
       return;
     }
+    if (!isSubroute && (!newMarkerType || newMarkerType.trim() === "")) {
+      return;
+    }
+
     setMarkerTypes(prevTypes => {
-      const newType = typeName;
+      let newType;
+      if (isSubroute) {
+        // Obten el contador actual para la ruta principal, o establecelo en 1 si no existe
+        const currentCounter = subrouteCounters[parentRoute] ? subrouteCounters[parentRoute] + 1 : 1;
+        // Actualiza el contador en el estado
+        setSubrouteCounters({
+          ...subrouteCounters,
+          [parentRoute]: currentCounter
+        });
+
+        // Genera el nuevo nombre de tipo
+        newType = `${parentRoute}_sub_${currentCounter}`;
+      } else {
+        newType = newMarkerType;
+      }
+
       return [...prevTypes, newType];
+    });
+    setNewMarkerType('');
+    setIsSubroute(false);
+    setParentRoute('');
+  };
+
+  const transformMarkersToTreeData = (markers) => {
+    // Clasifica los marcadores en marcadores principales y subrutas
+    const mainMarkers = markers?.filter(marker => !/_sub_\d+$/.test(marker));
+    const subRoutes = markers?.filter(marker => /_sub_\d+$/.test(marker));
+    //remove duplicates from subroutes and main markers
+    const uniquesubRoutes = subRoutes?.filter((subroute, index, self) =>
+      index === self.findIndex((t) => (
+        t === subroute
+      ))
+    )
+    const uniquemainMarkers = mainMarkers?.filter((marker, index, self) =>
+      !marker?.includes('RUTA SIN TITULO') &&
+      index === self.findIndex((t) => (
+        t === marker
+      ))
+    )
+
+    return uniquemainMarkers?.map((marker, markerIndex) => {
+      // Para cada marcador principal, busca sus subrutas
+      const markerSubRoutes = uniquesubRoutes?.filter(subroute => subroute.startsWith(marker));
+
+      return {
+        key: `${marker}`,
+        label: marker,
+        data: `${marker} Folder`,
+        icon: "pi pi-circle-fill",
+        children: markerSubRoutes?.map((subroute, subrouteIndex) => ({
+          key: `${subroute}`,
+          label: subroute,
+          data: `${subroute} Folder`,
+          icon: 'pi pi-fw pi-cog' // El icono puede ser personalizado según tus necesidades.
+        }))
+      }
     });
   };
 
@@ -397,7 +503,7 @@ function MapContainer({ google }) {
             backgroundColor: 'white',
             padding: '10px',
             borderRadius: '5px',
-            maxHeight: '600px',
+            maxHeight: '400px',
             overflowY: 'auto'
           }}>
 
@@ -413,7 +519,7 @@ function MapContainer({ google }) {
                 label={editMode ? "Guardar" : "Modo Edición"}
               />
             </FormGroup>
-            <FormControl fullWidth>
+            {/* <FormControl fullWidth>
               <InputLabel >Seleccionar tipo de marcador</InputLabel>
               <Select
                 autoWidth={true}
@@ -425,14 +531,37 @@ function MapContainer({ google }) {
                   !type?.includes('RUTA SIN TITULO') && <MenuItem key={type} value={type}>{type}</MenuItem>
                 ))}
               </Select>
-            </FormControl>
-            <div style={{ padding: "5px" }}>
-              <Button variant="contained" onClick={handleAddMarkerType}>Agregar Tipo de Marcador</Button>
+            </FormControl> */}
+            <TreeSelect disabled={!editMode} value={selectedMarkerType} onChange={(event) => handleMarkerTypeChange(event)} options={treeData}
+              filter className="md:w-20rem w-full" placeholder="Marcadores"></TreeSelect>
+
+            <div style={{ padding: "5px" }} className="flex align-items-center">
+              <Checkbox
+                checked={isSubroute}
+                onChange={(e) => setIsSubroute(e.target.checked)}
+              >
+              </Checkbox>
+              <label style={{ padding: "5px" }}>Subruta?</label>
+              {isSubroute ? (
+                <TreeSelect disabled={!editMode} value={parentRoute} onChange={(event) => setParentRoute(event.target.value)} options={treeData}
+                  filter className="md:w-20rem w-full" placeholder="Ruta principal"></TreeSelect>
+              ) : (
+                <InputText
+                  placeholder="Nombre marcador"
+                  value={newMarkerType}
+                  onChange={(e) => setNewMarkerType(e.target.value)}
+                />
+              )}
+              <div style={{ padding: "5px" }}>
+                <Button variant="contained" onClick={handleAddMarkerType}>
+                  Agregar Tipo de Marcador
+                </Button>
+              </div>
             </div>
             <div style={{ padding: "5px" }}>
               <Button variant="contained" onClick={handleHideAll} style={{ padding: '3px' }}>Ocultar todos</Button>
             </div>
-            <TableContainer component={Paper}>
+            {/* <TableContainer component={Paper}>
               <Table>
                 <TableBody>
                   {
@@ -451,7 +580,17 @@ function MapContainer({ google }) {
                   }
                 </TableBody>
               </Table>
-            </TableContainer>
+            </TableContainer> */}
+            {treeData && <TreeSelect
+              value={getAllKeys(treeData)}
+              onChange={(e) => handleMarkerVisibilityChange(e.value)}
+              options={treeData}
+              filter
+              selectionMode="checkbox"
+              className="md:w-20rem w-full"
+              placeholder="Ocultar/Mostrar"
+            />}
+
           </div>)}
 
         {markers.map((marker, index) => {
