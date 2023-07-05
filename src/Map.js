@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Map, Marker, Polyline, GoogleApiWrapper } from "google-maps-react";
 import axios from 'axios';
-import { Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button} from '@material-ui/core';
+import { Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button } from '@material-ui/core';
 import withReactContent from 'sweetalert2-react-content';
 import Swal from 'sweetalert2';
 import _ from 'lodash';
@@ -18,10 +18,10 @@ import Input from "@material-ui/core/Input";
 import { Table, TableBody, TableCell, TableContainer, TableRow, Paper } from '@material-ui/core';
 const API_URL = process.env.REACT_APP_API_URL;
 const apiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
-
+const MAX_ATTEMPTS = 3;
 
 function MapContainer({ google }) {
-  
+
   const [markers, setMarkers] = useState([]);
   const [editMode, setEditMode] = useState(false);
   const [selectedMarkerType, setSelectedMarkerType] = useState("");
@@ -45,6 +45,7 @@ function MapContainer({ google }) {
   useEffect(() => {
     loadMarkersFromAPI();
     loadMarkerTypesFromAPI();
+    // eslint-disable-next-line
   }, []);
   const handleSave = () => {
     const newDescription = inputRef.current.value;
@@ -58,7 +59,7 @@ function MapContainer({ google }) {
     const lng1 = point1.lng();
     const lat2 = point2.lat();
     const lng2 = point2.lng();
-  
+
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLng = (lng2 - lng1) * Math.PI / 180;
     const a =
@@ -67,10 +68,10 @@ function MapContainer({ google }) {
       Math.sin(dLng / 2) * Math.sin(dLng / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     const distance = 6371 * c; // Radio de la Tierra en kilómetros
-  
+
     return distance;
   };
-  
+
   const handleHideAll = () => {
     const newVisibility = { ...markerVisibility };
     for (let type in newVisibility) {
@@ -85,11 +86,24 @@ function MapContainer({ google }) {
     });
     setMarkerVisibility(visibility);
   }, [markerTypes]);
-
+  const retryRequest = async (requestFn, ...args) => {
+    let attempts = 0;
+    let error;
+    while (attempts < MAX_ATTEMPTS) {
+      try {
+        return await requestFn(...args); // Intenta la petición
+      } catch (err) {
+        attempts++; // Incrementa el conteo de intentos
+        error = err;
+      }
+    }
+    // Si todos los intentos fallaron, lanza el último error capturado
+    throw error;
+  };
   const loadMarkersFromAPI = async () => {
     setLoading(true);
     try {
-      const response = await axios.get(`${API_URL}/markers`);
+      const response = await retryRequest(() => axios.get(`${API_URL}/markers`));
       const markers = response.data;
       markers.forEach(marker => {
         marker.draggable = false;
@@ -101,35 +115,34 @@ function MapContainer({ google }) {
       setLoading(false);
     }
   };
-
+  
   const loadMarkerTypesFromAPI = async () => {
     setLoading(true);
     try {
-      const response = await axios.get(`${API_URL}/marker-types`);
-      const types = response.data;
-      setMarkerTypes(types);
+      const types = await retryRequest(() => axios.get(`${API_URL}/marker-types`));
+      setMarkerTypes(types.data);
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
   };
-
+  
   const updateMarkerInAPI = async marker => {
     setLoading(true);
     try {
-      await axios.put(`${API_URL}/markers/${marker.id}`, marker);
+      await retryRequest((marker) => axios.put(`${API_URL}/markers/${marker.id}`, marker), marker);
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
   };
-
+  
   const deleteMarkerInAPI = async id => {
     setLoading(true);
     try {
-      await axios.delete(`${API_URL}/markers/${id}`);
+      await retryRequest((id) => axios.delete(`${API_URL}/markers/${id}`), id);
     } catch (err) {
       console.error(err);
     } finally {
@@ -166,17 +179,17 @@ function MapContainer({ google }) {
   const createMarkerInAPI = async (markerToCreate) => {
     setLoading(true);
     try {
-        for (let i of markerToCreate) {
-            console.log(i);
-            const response = await axios.post(`${API_URL}/markers`, i);
-            i.id = response.data.id;
-        }
+      for (let i of markerToCreate) {
+        console.log(i);
+        const response = await axios.post(`${API_URL}/markers`, i);
+        i.id = response.data.id;
+      }
     } catch (err) {
-        console.error(err);
+      console.error(err);
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
-};
+  };
 
   const handleClose = () => {
     setOpen(false);
@@ -212,7 +225,7 @@ function MapContainer({ google }) {
         setMeasurementDistance(prevDistance => prevDistance + distance);
       }
       setMeasurementMarkers(prevMarkers => [...prevMarkers, { latLng }]);
-      
+
       // Crear marcador temporal
       const temporaryMarker = new google.maps.Marker({
         position: latLng,
@@ -225,20 +238,20 @@ function MapContainer({ google }) {
       setTemporaryMarkers(prevMarkers => [...prevMarkers, temporaryMarker]);
       setMeasurementPath(prevPath => [...prevPath, latLng]);
 
-        // Dibujar polilínea
-    if (measurementPolyline) {
-      measurementPolyline.setPath(measurementPath.concat(latLng));
-    } else {
-      const newPolyline = new google.maps.Polyline({
-        path: measurementPath.concat(latLng),
-        geodesic: true,
-        strokeColor: "#FF0000",
-        strokeOpacity: 1.0,
-        strokeWeight: 2,
-      });
-      newPolyline.setMap(map);
-      setMeasurementPolyline(newPolyline);
-    }
+      // Dibujar polilínea
+      if (measurementPolyline) {
+        measurementPolyline.setPath(measurementPath.concat(latLng));
+      } else {
+        const newPolyline = new google.maps.Polyline({
+          path: measurementPath.concat(latLng),
+          geodesic: true,
+          strokeColor: "#FF0000",
+          strokeOpacity: 1.0,
+          strokeWeight: 2,
+        });
+        newPolyline.setMap(map);
+        setMeasurementPolyline(newPolyline);
+      }
     } else if (editMode && selectedMarkerType) {
       const { latLng } = clickEvent;
       const lat = latLng.lat();
@@ -252,44 +265,37 @@ function MapContainer({ google }) {
       setMarkers(prevMarkers => [...prevMarkers, newMarker]);
       setModifiedMarkers(prevModifiedMarkers => [...prevModifiedMarkers, newMarker]);
     }
-    
+
   };
-  
-  
 
   const handleMarkerDragEnd = useCallback((marker, mapProps, map, dragEvent) => {
     const { latLng } = dragEvent;
     const lat = latLng.lat();
     const lng = latLng.lng();
-  
     const updatedMarker = {
       ...marker,
       lat,
       lng
     };
-  
+
     setMarkers(prevMarkers => prevMarkers.map(m => m.id === marker.id ? updatedMarker : m));
-    
+
     if (!modifiedMarkers.some(m => m.id === marker.id)) {
       setModifiedMarkers(prevModifiedMarkers => [...prevModifiedMarkers, updatedMarker]);
     } else {
       setModifiedMarkers(prevModifiedMarkers => prevModifiedMarkers.map(m => m.id === marker.id ? updatedMarker : m));
     }
   }, [modifiedMarkers]);
-
   const debouncedHandleMarkerDragEnd = _.debounce(handleMarkerDragEnd, 200);
-
-
   useEffect(() => {
-      setMeasurementDistance(0);
-      setMeasurementMarkers([]);
-      temporaryMarkers.forEach(marker => marker.setMap(null));
-      setTemporaryMarkers([]);
-      setMeasurementPath([]);
-      measurementPolyline?.setMap(null);
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+    setMeasurementDistance(0);
+    setMeasurementMarkers([]);
+    temporaryMarkers.forEach(marker => marker.setMap(null));
+    setTemporaryMarkers([]);
+    setMeasurementPath([]);
+    measurementPolyline?.setMap(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [measurementMode]);
-
 
   const toggleEditMode = useCallback(() => {
     let markerToCreate = [];
@@ -301,22 +307,21 @@ function MapContainer({ google }) {
             updateMarkerInAPI(marker);
           } else {
             markerToCreate.push(marker);
-          } 
+          }
         });
         if (markerToCreate?.length > 0) {
-            createMarkerInAPI(markerToCreate);
+          createMarkerInAPI(markerToCreate);
         };
         setModifiedMarkers([]);
         setLoading(false);
       }
       return !prevEditMode;
     });
+    // eslint-disable-next-line
   }, [modifiedMarkers]);
-
   const handleMarkerTypeChange = event => {
     setSelectedMarkerType(event.target.value);
   };
-
   const handleMarkerVisibilityChange = (type, e) => {
     if (type === 'RUTA SIN TITULO') {
       const newVisibility = { ...markerVisibility };
@@ -333,7 +338,6 @@ function MapContainer({ google }) {
       });
     }
   };
-
   const getRouteCoordinates = type => {
     const routeMarkers = markers.filter(marker => marker.type === type);
     return routeMarkers.map(marker => ({
@@ -341,210 +345,205 @@ function MapContainer({ google }) {
       lng: marker.lng,
     }));
   };
-
   const handleAddMarkerType = () => {
     const typeName = prompt("Ingrese el nombre del nuevo tipo de marcador:");
-
     if (!typeName || typeName.trim() === "") {
       return;
     }
-
     setMarkerTypes(prevTypes => {
       const newType = typeName;
       return [...prevTypes, newType];
     });
   };
 
-
   const mapStyles = {
     width: "100%",
-    height: "800px"
+    height: "100vh"
   };
 
   return (
     <div>
-
       <Map
-  google={google}
-  zoom={15}
-  style={mapStyles}
-  initialCenter={{ lat: -33.367613, lng: -70.738301 }}
-  onClick={handleMapClick}
->
-<div style={{
-    position: 'absolute',
-    top: '1px',
-    left: '200px',
-    backgroundColor: 'white',
-    padding: '10px',
-    borderRadius: '5px',
-  }}>
-  <Button variant="outlined"  onClick={() => setMenuVisible(!menuVisible)}>Ocultar/Mostrar</Button>
-  <Button variant="contained" onClick={() => setMeasurementMode(!measurementMode)}>
-  {measurementMode ? 'Terminar medición' : 'Iniciar medición'}
-  </Button>
-      {measurementMode && (
-      <div>
-        <div>Distancia acumulada: {measurementDistance.toFixed(2)} km</div>
-      </div>
-    )}
-</div>
-
-{menuVisible && (
-<div style={{
-    position: 'absolute',
-    top: '100px',
-    left: '15px',
-    backgroundColor: 'white',
-    padding: '10px',
-    borderRadius: '5px',
-    maxHeight: '600px',
-    overflowY: 'auto'
-  }}>
-
-      <FormGroup>
-        <FormControlLabel
-          control={
-            <Switch
-              checked={editMode}
-              onChange={toggleEditMode}
-              color="primary"
-            />
-          }
-          label={editMode ? "Guardar" : "Modo Edición"}
-        />
-      </FormGroup>
-      <FormControl fullWidth>
-      <InputLabel >Seleccionar tipo de marcador</InputLabel>
-      <Select
-        autoWidth={true}
-        value={selectedMarkerType}
-        onChange={handleMarkerTypeChange}
-        disabled={!editMode}
+        google={google}
+        zoom={15}
+        style={mapStyles}
+        initialCenter={{ lat: -33.367613, lng: -70.738301 }}
+        onClick={handleMapClick}
       >
-        {markerTypes.map(type => (
-          !type?.includes('RUTA SIN TITULO') && <MenuItem key={type} value={type}>{type}</MenuItem>
-        ))}
-      </Select>
-    </FormControl>
-    <div style={{ padding: "5px"}}>
-      <Button variant="contained" onClick={handleAddMarkerType}>Agregar Tipo de Marcador</Button>
-    </div>
-    <div style={{ padding: "5px"}}>
-      <Button variant="contained" onClick={handleHideAll} style={{ padding: '3px' }}>Ocultar todos</Button>
-    </div>
-    <TableContainer component={Paper}>
-      <Table>
-        <TableBody>
-          {
-            uniqueTypes.map(uniqueType => (
-              <TableRow key={uniqueType}>
-                <TableCell>{uniqueType}:</TableCell>
-                <TableCell>
-                  <input
-                    type="checkbox"
-                    checked={markerVisibility[uniqueType]}
-                    onChange={e => handleMarkerVisibilityChange(uniqueType, e)}
-                  />
-                </TableCell>
-              </TableRow>
-            ))
-          }
-        </TableBody>
-      </Table>
-    </TableContainer>
-  </div> )}
-  
-  {markers.map((marker, index) => {
-    const isVisible = markerVisibility[marker.type];
-    if (!isVisible) return null;
+        <div style={{
+          position: 'absolute',
+          top: '1px',
+          left: '200px',
+          backgroundColor: 'white',
+          padding: '10px',
+          borderRadius: '5px',
+        }}>
+          <Button variant="outlined" onClick={() => setMenuVisible(!menuVisible)}>Ocultar/Mostrar</Button>
+          <Button variant="contained" onClick={() => setMeasurementMode(!measurementMode)}>
+            {measurementMode ? 'Terminar medición' : 'Iniciar medición'}
+          </Button>
+          {measurementMode && (
+            <div>
+              <div>Distancia acumulada: {measurementDistance.toFixed(2)} km</div>
+            </div>
+          )}
+        </div>
 
-    return (
-      <Marker
-        key={marker.id}
-        id={marker.id}
-        position={{ lat: marker.lat, lng: marker.lng }}
-        icon={{
-          url: 
-            marker.type === "MUFA" 
-              ? "https://maps.google.com/mapfiles/ms/icons/red-dot.png" 
-              : marker.type === "NAP" 
-                ? "https://maps.google.com/mapfiles/ms/icons/yellow-dot.png" 
-                : "https://maps.google.com/mapfiles/ms/icons/blue-dot.png",
+        {menuVisible && (
+          <div style={{
+            position: 'absolute',
+            top: '100px',
+            left: '15px',
+            backgroundColor: 'white',
+            padding: '10px',
+            borderRadius: '5px',
+            maxHeight: '600px',
+            overflowY: 'auto'
+          }}>
+
+            <FormGroup>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={editMode}
+                    onChange={toggleEditMode}
+                    color="primary"
+                  />
+                }
+                label={editMode ? "Guardar" : "Modo Edición"}
+              />
+            </FormGroup>
+            <FormControl fullWidth>
+              <InputLabel >Seleccionar tipo de marcador</InputLabel>
+              <Select
+                autoWidth={true}
+                value={selectedMarkerType}
+                onChange={handleMarkerTypeChange}
+                disabled={!editMode}
+              >
+                {markerTypes.map(type => (
+                  !type?.includes('RUTA SIN TITULO') && <MenuItem key={type} value={type}>{type}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <div style={{ padding: "5px" }}>
+              <Button variant="contained" onClick={handleAddMarkerType}>Agregar Tipo de Marcador</Button>
+            </div>
+            <div style={{ padding: "5px" }}>
+              <Button variant="contained" onClick={handleHideAll} style={{ padding: '3px' }}>Ocultar todos</Button>
+            </div>
+            <TableContainer component={Paper}>
+              <Table>
+                <TableBody>
+                  {
+                    uniqueTypes.map(uniqueType => (
+                      <TableRow key={uniqueType}>
+                        <TableCell>{uniqueType}:</TableCell>
+                        <TableCell>
+                          <input
+                            type="checkbox"
+                            checked={markerVisibility[uniqueType]}
+                            onChange={e => handleMarkerVisibilityChange(uniqueType, e)}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  }
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </div>)}
+
+        {markers.map((marker, index) => {
+          const isVisible = markerVisibility[marker.type];
+          if (!isVisible) return null;
+
+          return (
+            <Marker
+              key={marker.id}
+              id={marker.id}
+              position={{ lat: marker.lat, lng: marker.lng }}
+              icon={{
+                url:
+                  marker.type === "MUFA"
+                    ? "https://maps.google.com/mapfiles/ms/icons/red-dot.png"
+                    : marker.type === "NAP"
+                      ? "https://maps.google.com/mapfiles/ms/icons/yellow-dot.png"
+                      : "https://maps.google.com/mapfiles/ms/icons/blue-dot.png",
                 scaledSize: new window.google.maps.Size(20, 20),  // Este es tu valor por defecto
-        }}
-        draggable={editMode && marker.draggable} // Toma en cuenta el estado de "draggable" del marcador
-        onClick={() => handleClickOpen(marker)}
-        onDragend={(mapProps, map, dragEvent) =>
-          debouncedHandleMarkerDragEnd(marker, mapProps, map, dragEvent)
-        }
-      ></Marker>
-    );
-  })}
-  {measurementMode && temporaryMarkers.map((marker, index) => (
-      <Marker
-        key={index}
-        position={marker.getPosition()}
-        icon={{
-          url: "https://maps.google.com/mapfiles/ms/icons/green-dot.png",
-          scaledSize: new window.google.maps.Size(20, 20),
-        }}
-      />
-    ))}
-  {markerTypes.map(type => {
-    if (markerVisibility[type] && type !== "MUFA" && type !== "NAP") {
-      return (
-        <Polyline
-          key={type}
-          path={getRouteCoordinates(type)}
-          strokeColor="#0000FF"
-          strokeOpacity={1}
-          strokeWeight={1}
-        />
-      );
-    }
-    return null;
-  })}
-  
-  <Dialog
-      open={open}
-      onClose={handleClose}
-      PaperProps={{ style: { backgroundColor: '#f5f5f5', borderRadius: 12} }}
-    >
-      <DialogTitle style={{ textAlign: 'center' }}>{selectedMarker?.type}</DialogTitle>
-      <DialogContent>
-        {editMode ? (
-            <Input
-            autoFocus
-            fullWidth
-            defaultValue={selectedMarker?.description}
-            inputRef={inputRef}
+              }}
+              draggable={editMode && marker.draggable} // Toma en cuenta el estado de "draggable" del marcador
+              onClick={() => handleClickOpen(marker)}
+              onDragend={(mapProps, map, dragEvent) =>
+                debouncedHandleMarkerDragEnd(marker, mapProps, map, dragEvent)
+              }
+            ></Marker>
+          );
+        })}
+        {measurementMode && temporaryMarkers.map((marker, index) => (
+          <Marker
+            key={index}
+            position={marker.getPosition()}
+            icon={{
+              url: "https://maps.google.com/mapfiles/ms/icons/green-dot.png",
+              scaledSize: new window.google.maps.Size(20, 20),
+            }}
           />
-        ) : (
-          <DialogContentText>{selectedMarker?.description}</DialogContentText>
-        )}
-      </DialogContent>
-      <DialogActions style={{justifyContent:"center"}}>
-        {editMode && (
-          
-          <Button onClick={handleSave} color="primary" variant="contained">
-            Guardar
-          </Button>
-        )}
-        {editMode && (
-          <Button onClick={handleDeleteMarker} color="secondary" variant="contained">
-            Eliminar Marcador
-          </Button>
-        )}
-      </DialogActions>
-    </Dialog>
-</Map>
-    <Backdrop
-          sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 1 }}
-          open={loading}
+        ))}
+        {markerTypes.map(type => {
+          if (markerVisibility[type] && type !== "MUFA" && type !== "NAP") {
+            return (
+              <Polyline
+                key={type}
+                path={getRouteCoordinates(type)}
+                strokeColor="#0000FF"
+                strokeOpacity={1}
+                strokeWeight={1}
+              />
+            );
+          }
+          return null;
+        })}
+
+        <Dialog
+          open={open}
+          onClose={handleClose}
+          PaperProps={{ style: { backgroundColor: '#f5f5f5', borderRadius: 12 } }}
         >
-      <CircularProgress color="inherit" />
-    </Backdrop>
+          <DialogTitle style={{ textAlign: 'center' }}>{selectedMarker?.type}</DialogTitle>
+          <DialogContent>
+            {editMode ? (
+              <Input
+                autoFocus
+                fullWidth
+                defaultValue={selectedMarker?.description}
+                inputRef={inputRef}
+              />
+            ) : (
+              <DialogContentText>{selectedMarker?.description}</DialogContentText>
+            )}
+          </DialogContent>
+          <DialogActions style={{ justifyContent: "center" }}>
+            {editMode && (
+
+              <Button onClick={handleSave} color="primary" variant="contained">
+                Guardar
+              </Button>
+            )}
+            {editMode && (
+              <Button onClick={handleDeleteMarker} color="secondary" variant="contained">
+                Eliminar Marcador
+              </Button>
+            )}
+          </DialogActions>
+        </Dialog>
+      </Map>
+      <Backdrop
+        sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 1 }}
+        open={loading}
+      >
+        <CircularProgress color="inherit" />
+      </Backdrop>
     </div>
   );
 }
