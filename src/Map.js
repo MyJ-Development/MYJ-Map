@@ -50,13 +50,32 @@ function MapContainer({ google }) {
   const [allVisible, setAllVisible] = useState(false);
   const [treeData, setTreeData] = useState(null);
   const [selectedNodeKeys, setSelectedNodeKeys] = useState(null);
+  const [currentLocation, setCurrentLocation] = useState(null);
+
   useEffect(() => {
     if (markerTypes.length > 0) {
       const newTreeData = transformMarkersToTreeData(markerTypes);
       setTreeData(newTreeData);
     }
   }, [markerTypes]);
-
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setCurrentLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          });
+        },
+        (error) => {
+          // handle error
+          console.log(error);
+        }
+      );
+    } else {
+      alert("La geolocalización no es compatible con este navegador.");
+    }
+  }, []);
   useEffect(() => {
     loadMarkersFromAPI();
     loadMarkerTypesFromAPI();
@@ -486,9 +505,19 @@ function MapContainer({ google }) {
         google={google}
         zoom={15}
         style={mapStyles}
-        initialCenter={{ lat: -33.367613, lng: -70.738301 }}
+        initialCenter={currentLocation || { lat: -33.367613, lng: -70.738301 }}
         onClick={handleMapClick}
-      >
+      > 
+        {currentLocation && (
+  <Marker
+    key="currentLocation"
+    position={currentLocation}
+    icon={{
+      url: "https://cdn-icons-png.flaticon.com/128/4436/4436638.png",
+      scaledSize: new window.google.maps.Size(40, 40),
+    }}
+  />
+)}
         <div style={{
           position: 'absolute',
           top: '1px',
