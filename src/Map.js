@@ -15,8 +15,10 @@ import Select from '@mui/material/Select';
 import Backdrop from '@mui/material/Backdrop';
 import CircularProgress from '@mui/material/CircularProgress';
 import Input from "@material-ui/core/Input";
+import { Table, TableBody, TableCell, TableContainer, TableRow, Paper } from '@material-ui/core';
 const API_URL = process.env.REACT_APP_API_URL;
 const apiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
+
 
 function MapContainer({ google }) {
   
@@ -31,7 +33,8 @@ function MapContainer({ google }) {
   const [modifiedMarkers, setModifiedMarkers] = useState([]);
   const [loading, setLoading] = useState(false);
   const inputRef = useRef();
-  
+  const uniqueTypes = [...new Set(markerTypes.map(type => type && type.includes('RUTA SIN TITULO') ? 'RUTA SIN TITULO' : type))];
+
   useEffect(() => {
     loadMarkersFromAPI();
     loadMarkerTypesFromAPI();
@@ -43,7 +46,7 @@ function MapContainer({ google }) {
     handleSaveChanges(markerToUpdate);
     handleClose();
   };
-
+  
   const handleHideAll = () => {
     const newVisibility = { ...markerVisibility };
     for (let type in newVisibility) {
@@ -136,17 +139,20 @@ function MapContainer({ google }) {
     }
   };
 
-  const createMarkerInAPI = async marker => {
+  const createMarkerInAPI = async (markerToCreate) => {
     setLoading(true);
     try {
-      const response = await axios.post(`${API_URL}/markers`, marker);
-      marker.id = response.data.id;
+        for (let i of markerToCreate) {
+            console.log(i);
+            const response = await axios.post(`${API_URL}/markers`, i);
+            i.id = response.data.id;
+        }
     } catch (err) {
-      console.error(err);
+        console.error(err);
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
-  };
+};
 
   const handleClose = () => {
     setOpen(false);
@@ -187,6 +193,9 @@ function MapContainer({ google }) {
       draggable: true
     };
     setMarkers(prevMarkers => [...prevMarkers, newMarker]);
+    //append new marker to modifiedMarkers
+    setModifiedMarkers(prevModifiedMarkers => [...prevModifiedMarkers, newMarker]);
+
   };
 
   const handleMarkerDragEnd = useCallback((marker, mapProps, map, dragEvent) => {
@@ -212,6 +221,7 @@ function MapContainer({ google }) {
   const debouncedHandleMarkerDragEnd = _.debounce(handleMarkerDragEnd, 200);
 
   const toggleEditMode = useCallback(() => {
+    let markerToCreate = [];
     setEditMode(prevEditMode => {
       if (prevEditMode) {
         setLoading(true);
@@ -219,9 +229,12 @@ function MapContainer({ google }) {
           if (marker.id) {
             updateMarkerInAPI(marker);
           } else {
-            createMarkerInAPI(marker);
+            markerToCreate.push(marker);
           } 
         });
+        if (markerToCreate?.length > 0) {
+            createMarkerInAPI(markerToCreate);
+        };
         setModifiedMarkers([]);
         setLoading(false);
       }
@@ -237,7 +250,7 @@ function MapContainer({ google }) {
     if (type === 'RUTA SIN TITULO') {
       const newVisibility = { ...markerVisibility };
       for (let markerType in newVisibility) {
-        if (markerType.includes('RUTA SIN TITULO')) {
+        if (markerType?.includes('RUTA SIN TITULO')) {
           newVisibility[markerType] = e.target.checked;
         }
       }
@@ -319,7 +332,7 @@ function MapContainer({ google }) {
         disabled={!editMode}
       >
         {markerTypes.map(type => (
-          !type.includes('RUTA SIN TITULO') && <MenuItem key={type} value={type}>{type}</MenuItem>
+          !type?.includes('RUTA SIN TITULO') && <MenuItem key={type} value={type}>{type}</MenuItem>
         ))}
       </Select>
     </FormControl>
@@ -329,24 +342,26 @@ function MapContainer({ google }) {
     <div style={{ padding: "5px"}}>
       <Button variant="contained" onClick={handleHideAll} style={{ padding: '3px' }}>Ocultar todos</Button>
     </div>
-    <table>
-      <tbody>
-        {
-          [...new Set(markerTypes.map(type => type.includes('RUTA SIN TITULO') ? 'RUTA SIN TITULO' : type))].map(uniqueType => (
-            <tr key={uniqueType}>
-              <td>{uniqueType}:</td>
-              <td>
-                <input
-                  type="checkbox"
-                  checked={markerVisibility[uniqueType]}
-                  onChange={e => handleMarkerVisibilityChange(uniqueType, e)}
-                />
-              </td>
-            </tr>
-          ))
-        }
-      </tbody>
-    </table>
+    <TableContainer component={Paper}>
+      <Table>
+        <TableBody>
+          {
+            uniqueTypes.map(uniqueType => (
+              <TableRow key={uniqueType}>
+                <TableCell>{uniqueType}:</TableCell>
+                <TableCell>
+                  <input
+                    type="checkbox"
+                    checked={markerVisibility[uniqueType]}
+                    onChange={e => handleMarkerVisibilityChange(uniqueType, e)}
+                  />
+                </TableCell>
+              </TableRow>
+            ))
+          }
+        </TableBody>
+      </Table>
+    </TableContainer>
   </div>
   
   {markers.map((marker, index) => {
@@ -384,7 +399,7 @@ function MapContainer({ google }) {
           path={getRouteCoordinates(type)}
           strokeColor="#0000FF"
           strokeOpacity={0.8}
-          strokeWeight={2}
+          strokeWeight={1}
         />
       );
     }
