@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Map, Marker, Polyline, GoogleApiWrapper } from "google-maps-react";
 import axios from 'axios';
-import { Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button } from '@material-ui/core';
+import { Dialog,DialogTitle, DialogContent, DialogContentText, DialogActions, Button } from '@material-ui/core';
+// import { Button } from '@material-ui/core';
 import withReactContent from 'sweetalert2-react-content';
 import Swal from 'sweetalert2';
 import _ from 'lodash';
@@ -18,6 +19,7 @@ import 'primeicons/primeicons.css';
 import 'primeflex/primeflex.css';
 import { InputText } from 'primereact/inputtext';
 import { Checkbox } from 'primereact/checkbox';
+// import { Dialog } from "primereact/dialog";
 
 const API_URL = process.env.REACT_APP_API_URL;
 const apiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
@@ -35,7 +37,7 @@ function MapContainer({ google }) {
   const [markerTypes, setMarkerTypes] = useState([]);
   const [modifiedMarkers, setModifiedMarkers] = useState([]);
   const [loading, setLoading] = useState(false);
-  const inputRef = useRef();
+  const inputRefDescription = useRef();
   const [menuVisible, setMenuVisible] = useState(true);
   const [measurementMode, setMeasurementMode] = useState(false);
   const [measurementDistance, setMeasurementDistance] = useState(0);
@@ -47,10 +49,13 @@ function MapContainer({ google }) {
   const [isSubroute, setIsSubroute] = useState(false);
   const [parentRoute, setParentRoute] = useState('');
   const [subrouteCounters, setSubrouteCounters] = useState({});
-  const [allVisible, setAllVisible] = useState(false);
+  const [allVisible, setAllVisible] = useState(true);
   const [treeData, setTreeData] = useState(null);
   const [selectedNodeKeys, setSelectedNodeKeys] = useState(null);
   const [currentLocation, setCurrentLocation] = useState(null);
+  //const first load
+  const [firstLoad, setFirstLoad] = useState(true);
+  const [updateMarkerType, setUpdateMarkerType] = useState(""); 
 
   useEffect(() => {
     if (markerTypes.length > 0) {
@@ -82,11 +87,12 @@ function MapContainer({ google }) {
     // eslint-disable-next-line
   }, []);
   const handleSave = () => {
-    const newDescription = inputRef.current.value;
+    const newDescription = inputRefDescription.current.value;
     let markerToUpdate = ""
-    markerToUpdate = { ...selectedMarker, description: newDescription };
+    markerToUpdate = { ...selectedMarker, description: newDescription, type: updateMarkerType };
     handleSaveChanges(markerToUpdate);
     handleClose();
+    setUpdateMarkerType("");
   };
   const calculateDistance = (point1, point2) => {
     const lat1 = point1.lat();
@@ -113,7 +119,6 @@ function MapContainer({ google }) {
     }
     setMarkerVisibility(newVisibility);
     setAllVisible(!allVisible); // toggle the allVisible state
-    console.log(newVisibility);
     if (!allVisible) {
       setSelectedNodeKeys(null);
     } else {
@@ -127,12 +132,20 @@ function MapContainer({ google }) {
   };
   useEffect(() => {
     const visibility = {};
-    markerTypes.forEach(type => {
-      visibility[type] = true;
-    });
-    setMarkerVisibility(visibility);
+    if(firstLoad){
+      markerTypes.forEach(type => {
+        visibility[type] = false;
+      });
+      setMarkerVisibility(visibility);
+      setFirstLoad(false);
+    } else {
+      markerTypes.forEach(type => {
+        visibility[type] = false;
+      });
+      setMarkerVisibility(visibility);
+    }
+    // eslint-disable-next-line
   }, [markerTypes]);
-
 
   const retryRequest = async (requestFn, ...args) => {
     let attempts = 0;
@@ -367,6 +380,7 @@ function MapContainer({ google }) {
     measurementPolyline?.setMap(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [measurementMode]);
+
 
   const toggleEditMode = useCallback(() => {
     let markerToCreate = [];
@@ -669,19 +683,22 @@ function MapContainer({ google }) {
           <DialogTitle style={{ textAlign: 'center' }}>{selectedMarker?.type}</DialogTitle>
           <DialogContent>
             {editMode ? (
+              <>
+            <TreeSelect disabled={!editMode} value={updateMarkerType} onChange={(event) => setUpdateMarkerType(event.target.value)} options={treeData}
+              filter className="md:w-20rem w-full" placeholder="Cambiar tipo de marcador"></TreeSelect>
               <Input
                 autoFocus
                 fullWidth
                 defaultValue={selectedMarker?.description}
-                inputRef={inputRef}
+                inputRef={inputRefDescription}
               />
+              </>
             ) : (
               <DialogContentText>{selectedMarker?.description}</DialogContentText>
             )}
           </DialogContent>
           <DialogActions style={{ justifyContent: "center" }}>
             {editMode && (
-
               <Button onClick={handleSave} color="primary" variant="contained">
                 Guardar
               </Button>
