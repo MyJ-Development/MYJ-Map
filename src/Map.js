@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Map, Marker, Polyline, GoogleApiWrapper } from "google-maps-react";
 import axios from 'axios';
-import { Dialog,DialogTitle, DialogContent, DialogContentText, DialogActions, Button } from '@material-ui/core';
+import { Button } from '@material-ui/core';
 // import { Button } from '@material-ui/core';
 import withReactContent from 'sweetalert2-react-content';
 import Swal from 'sweetalert2';
@@ -19,7 +19,10 @@ import 'primeicons/primeicons.css';
 import 'primeflex/primeflex.css';
 import { InputText } from 'primereact/inputtext';
 import { Checkbox } from 'primereact/checkbox';
+
 // import { Dialog } from "primereact/dialog";
+import Popover from '@mui/material/Popover';
+import Typography from '@mui/material/Typography';
 
 const API_URL = process.env.REACT_APP_API_URL;
 const apiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
@@ -55,7 +58,8 @@ function MapContainer({ google }) {
   const [currentLocation, setCurrentLocation] = useState(null);
   //const first load
   const [firstLoad, setFirstLoad] = useState(true);
-  const [updateMarkerType, setUpdateMarkerType] = useState(""); 
+  const [updateMarkerType, setUpdateMarkerType] = useState("");
+  const anchorRef = useRef(null);
 
   useEffect(() => {
     if (markerTypes.length > 0) {
@@ -132,7 +136,7 @@ function MapContainer({ google }) {
   };
   useEffect(() => {
     const visibility = {};
-    if(firstLoad){
+    if (firstLoad) {
       markerTypes.forEach(type => {
         visibility[type] = false;
       });
@@ -248,7 +252,7 @@ function MapContainer({ google }) {
     setSelectedMarker(null);
     setOpen(false);
   };
-  const handleClickOpen = marker => {
+  const handleClickOpen = (marker, e) => {
     if (marker) {
       const updatedMarker = { ...marker, draggable: true }; // Invierte el valor de la propiedad draggable
       setSelectedMarker(updatedMarker);
@@ -352,7 +356,7 @@ function MapContainer({ google }) {
 
   };
 
-  const handleMarkerDragEnd = useCallback((marker, mapProps, map, dragEvent) => {
+  const handleMarkerDragEnd = (marker, mapProps, map, dragEvent) => {
     const { latLng } = dragEvent;
     const lat = latLng.lat();
     const lng = latLng.lng();
@@ -369,8 +373,9 @@ function MapContainer({ google }) {
     } else {
       setModifiedMarkers(prevModifiedMarkers => prevModifiedMarkers.map(m => m.id === marker.id ? updatedMarker : m));
     }
-  }, [modifiedMarkers]);
-  const debouncedHandleMarkerDragEnd = _.debounce(handleMarkerDragEnd, 200);
+  }
+
+
   useEffect(() => {
     setMeasurementDistance(0);
     setMeasurementMarkers([]);
@@ -464,23 +469,23 @@ function MapContainer({ google }) {
     // Clasifica los marcadores en marcadores principales y subrutas
     const mainMarkers = markers?.filter(marker => !/_sub_\d+$/.test(marker));
     const subRoutes = markers?.filter(marker => /_sub_\d+$/.test(marker));
-  
+
     // Remove duplicates from subroutes and main markers
     const uniquesubRoutes = [...new Set(subRoutes)];
     const uniquemainMarkers = [...new Set(mainMarkers)];
-  
+
     // Separar rutas sin título
     const titledRoutes = uniquemainMarkers.filter(marker => !marker.includes('RUTA SIN TITULO'));
     const untitledRoutes = uniquemainMarkers.filter(marker => marker.includes('RUTA SIN TITULO'));
-  
+
     // Agregar rutas sin título como subrutas de 'RUTA SIN TITULO'
     let sinTituloSubRoutes = uniquesubRoutes.filter(subroute => subroute.includes('RUTA SIN TITULO'));
     sinTituloSubRoutes = sinTituloSubRoutes.concat(untitledRoutes);
-  
+
     return titledRoutes.map((marker, markerIndex) => {
       // Para cada marcador principal, busca sus subrutas
       const markerSubRoutes = uniquesubRoutes.filter(subroute => subroute.startsWith(marker));
-  
+
       return {
         key: `${marker}`,
         label: marker,
@@ -506,7 +511,7 @@ function MapContainer({ google }) {
       }))
     }]);
   };
-  
+
 
   const mapStyles = {
     width: "100%",
@@ -521,17 +526,17 @@ function MapContainer({ google }) {
         style={mapStyles}
         initialCenter={currentLocation || { lat: -33.367613, lng: -70.738301 }}
         onClick={handleMapClick}
-      > 
+      >
         {currentLocation && (
-  <Marker
-    key="currentLocation"
-    position={currentLocation}
-    icon={{
-      url: "https://cdn-icons-png.flaticon.com/128/4436/4436638.png",
-      scaledSize: new window.google.maps.Size(40, 40),
-    }}
-  />
-)}
+          <Marker
+            key="currentLocation"
+            position={currentLocation}
+            icon={{
+              url: "https://cdn-icons-png.flaticon.com/128/4436/4436638.png",
+              scaledSize: new window.google.maps.Size(40, 40),
+            }}
+          />
+        )}
         <div style={{
           position: 'absolute',
           top: '1px',
@@ -639,13 +644,13 @@ function MapContainer({ google }) {
                     ? "https://maps.google.com/mapfiles/ms/icons/red-dot.png"
                     : marker.type === "NAP"
                       ? "https://maps.google.com/mapfiles/ms/icons/yellow-dot.png"
-                      : "https://maps.google.com/mapfiles/ms/icons/blue-dot.png",
-                scaledSize: new window.google.maps.Size(20, 20),  // Este es tu valor por defecto
+                      : "http://labs.google.com/ridefinder/images/mm_20_blue.png",
+                // scaledSize: new window.google.maps.Size(20, 20),  // Este es tu valor por defecto
               }}
               draggable={editMode && marker.draggable} // Toma en cuenta el estado de "draggable" del marcador
-              onClick={() => handleClickOpen(marker)}
+              onClick={(e) => handleClickOpen(marker, e)}
               onDragend={(mapProps, map, dragEvent) =>
-                debouncedHandleMarkerDragEnd(marker, mapProps, map, dragEvent)
+                handleMarkerDragEnd(marker, mapProps, map, dragEvent)
               }
             ></Marker>
           );
@@ -674,42 +679,52 @@ function MapContainer({ google }) {
           }
           return null;
         })}
+        <div ref={anchorRef} style={{
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: '0',
+          height: '0',
+        }} />
 
-        <Dialog
+        <Popover
+          style={{ padding: '10px' }}
           open={open}
+          anchorEl={anchorRef.current}
           onClose={handleClose}
-          PaperProps={{ style: { backgroundColor: '#f5f5f5', borderRadius: 12 } }}
         >
-          <DialogTitle style={{ textAlign: 'center' }}>{selectedMarker?.type}</DialogTitle>
-          <DialogContent>
+          <Typography style={{ padding: '10px' }}><b>{selectedMarker?.type}</b></Typography>
+          <div >
             {editMode ? (
               <>
-            <TreeSelect disabled={!editMode} value={updateMarkerType} onChange={(event) => setUpdateMarkerType(event.target.value)} options={treeData}
-              filter className="md:w-20rem w-full" placeholder="Cambiar tipo de marcador"></TreeSelect>
-              <Input
-                autoFocus
-                fullWidth
-                defaultValue={selectedMarker?.description}
-                inputRef={inputRefDescription}
-              />
+                <TreeSelect style={{ zIndex: 2000 }} disabled={!editMode} value={updateMarkerType} onChange={(event) => setUpdateMarkerType(event.target.value)} options={treeData}
+                  filter className="md:w-20rem w-full" placeholder="Cambiar tipo de marcador"></TreeSelect>
+                <Input
+                  autoFocus
+                  fullWidth
+                  defaultValue={selectedMarker?.description}
+                  inputRef={inputRefDescription}
+                />
               </>
             ) : (
-              <DialogContentText>{selectedMarker?.description}</DialogContentText>
+              <Typography style={{ padding: '10px' }}>{selectedMarker?.description}</Typography>
             )}
-          </DialogContent>
-          <DialogActions style={{ justifyContent: "center" }}>
+          </div>
+          <div style={{ display: "flex" }}>
             {editMode && (
-              <Button onClick={handleSave} color="primary" variant="contained">
+              <Button style={{ padding: '10px' }} onClick={handleSave} color="primary" variant="contained">
                 Guardar
               </Button>
             )}
             {editMode && (
-              <Button onClick={handleDeleteMarker} color="secondary" variant="contained">
+              <Button style={{ padding: '10px', marginLeft: "10px" }} onClick={handleDeleteMarker} color="secondary" variant="contained">
                 Eliminar Marcador
               </Button>
             )}
-          </DialogActions>
-        </Dialog>
+          </div>
+        </Popover>
+
       </Map>
       <Backdrop
         sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 1 }}

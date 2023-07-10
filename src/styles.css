@@ -1,3 +1,12 @@
 .MuiDialog-root{
     z-index: 0 !important;
 }
+
+.MuiPaper-root{
+    padding: 10px;
+    z-index: 0 !important;
+}
+
+.p-treeselect-panel{
+    z-index: 2000 !important;
+}	
